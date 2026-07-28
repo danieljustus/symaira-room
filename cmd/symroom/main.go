@@ -2,15 +2,19 @@ package main
 
 import (
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/danieljustus/symaira-corekit/exitcodes"
 	"github.com/danieljustus/symaira-room/internal/config"
 	"github.com/danieljustus/symaira-room/internal/identity"
+	"github.com/danieljustus/symaira-room/internal/index"
+	"github.com/danieljustus/symaira-room/internal/journal"
 	"github.com/danieljustus/symaira-room/internal/members"
 	"github.com/danieljustus/symaira-room/internal/room"
 	"github.com/danieljustus/symaira-room/internal/version"
@@ -238,8 +242,8 @@ func main() {
 			os.Exit(int(exitcodes.ExitNoInput))
 		}
 		if fs.NArg() < 1 {
-			fmt.Fprintln(os.Stderr, "Usage: symroom note <message> [--identity <name>] [--json]")
-			os.Exit(int(exitcodes.ExitNoInput))
+			fmt.Println("Usage: symroom note <message> [--identity <name>] [--json]")
+			os.Exit(int(exitcodes.ExitOK))
 		}
 		msg := fs.Arg(0)
 		idName := *idFlag
@@ -281,8 +285,8 @@ func main() {
 			os.Exit(int(exitcodes.ExitNoInput))
 		}
 		if fs.NArg() < 1 {
-			fmt.Fprintln(os.Stderr, "Usage: symroom decide <decision> [--refs ref1,ref2] [--identity <name>] [--json]")
-			os.Exit(int(exitcodes.ExitNoInput))
+			fmt.Println("Usage: symroom decide <decision> [--refs ref1,ref2] [--identity <name>] [--json]")
+			os.Exit(int(exitcodes.ExitOK))
 		}
 		msg := fs.Arg(0)
 		idName := *idFlag
@@ -319,8 +323,97 @@ func main() {
 			fmt.Println(ev.ID)
 		}
 		os.Exit(int(exitcodes.ExitOK))
+	case "verify":
+		fs := flag.NewFlagSet("verify", flag.ExitOnError)
+		jsonFlag := fs.Bool("json", false, "Output verification findings as JSON")
+		if err := fs.Parse(os.Args[2:]); err != nil {
+			os.Exit(int(exitcodes.ExitNoInput))
+		}
+
+		j := journal.New("journal")
+		report, err := j.Verify()
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error verifying journal: %v\n", err)
+			os.Exit(int(exitcodes.ExitGeneric))
+		}
+
+		if *jsonFlag {
+			data, _ := json.MarshalIndent(report, "", "  ")
+			fmt.Println(string(data))
+		} else {
+			if report.Valid {
+				fmt.Println("Journal verification PASSED: zero findings")
+			} else {
+				fmt.Printf("Journal verification FAILED: %d finding(s):\n", len(report.Findings))
+				for _, f := range report.Findings {
+					fmt.Printf("  - [%s] %s (event: %s, author: %s)\n", f.Code, f.Message, f.EventID, f.Author)
+				}
+			}
+		}
+
+		if !report.Valid {
+			os.Exit(int(exitcodes.ExitGeneric))
+		}
+		os.Exit(int(exitcodes.ExitOK))
+	case "log":
+		fs := flag.NewFlagSet("log", flag.ExitOnError)
+		sinceFlag := fs.String("since", "", "Filter events since RFC3339 timestamp")
+		untilFlag := fs.String("until", "", "Filter events until RFC3339 timestamp")
+		kindFlag := fs.String("kind", "", "Filter events by kind")
+		authorFlag := fs.String("author", "", "Filter events by author member ID")
+		runFlag := fs.String("run", "", "Filter events by run ID")
+		limitFlag := fs.Int("limit", 0, "Limit number of events returned")
+		jsonFlag := fs.Bool("json", false, "Output events as NDJSON")
+		if err := fs.Parse(os.Args[2:]); err != nil {
+			os.Exit(int(exitcodes.ExitNoInput))
+		}
+
+		j := journal.New("journal")
+		res, err := j.QueryLog(journal.LogFilter{
+			Since:  *sinceFlag,
+			Until:  *untilFlag,
+			Kind:   *kindFlag,
+			Author: *authorFlag,
+			Run:    *runFlag,
+			Limit:  *limitFlag,
+		})
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error querying log: %v\n", err)
+			os.Exit(int(exitcodes.ExitGeneric))
+		}
+
+		journal.PrintLogWarnings(res.InvalidCount)
+
+		if *jsonFlag {
+			for _, ev := range res.Events {
+				line, _ := ev.MarshalJSONLine()
+				fmt.Print(string(line))
+			}
+		} else {
+			for _, ev := range res.Events {
+				fmt.Println(journal.FormatEventHuman(ev))
+			}
+		}
+		os.Exit(int(exitcodes.ExitOK))
+	case "index":
+		if len(os.Args) < 3 || os.Args[2] != "rebuild" {
+			fmt.Println("Usage: symroom index rebuild")
+			os.Exit(int(exitcodes.ExitOK))
+		}
+
+		j := journal.New("journal")
+		dbPath := filepath.Join(".symroom", "index.sqlite")
+		indexer := index.New(dbPath)
+
+		if err := indexer.Rebuild(j); err != nil {
+			fmt.Fprintf(os.Stderr, "Error rebuilding index: %v\n", err)
+			os.Exit(int(exitcodes.ExitGeneric))
+		}
+
+		fmt.Printf("Rebuilt derived index at %s\n", dbPath)
+		os.Exit(int(exitcodes.ExitOK))
 	case "artifact",
-		"log", "verify", "index", "run", "checkpoint", "watch",
+		"run", "checkpoint", "watch",
 		"brain-profile", "doctor", "mcp":
 		fs := flag.NewFlagSet(subcommand, flag.ExitOnError)
 		fs.Usage = func() {
