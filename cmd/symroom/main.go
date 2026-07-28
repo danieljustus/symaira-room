@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"github.com/danieljustus/symaira-corekit/exitcodes"
+	"github.com/danieljustus/symaira-room/internal/artifact"
 	"github.com/danieljustus/symaira-room/internal/config"
 	"github.com/danieljustus/symaira-room/internal/identity"
 	"github.com/danieljustus/symaira-room/internal/index"
@@ -412,8 +413,110 @@ func main() {
 
 		fmt.Printf("Rebuilt derived index at %s\n", dbPath)
 		os.Exit(int(exitcodes.ExitOK))
-	case "artifact",
-		"run", "checkpoint", "watch",
+	case "artifact":
+		if len(os.Args) < 3 {
+			fmt.Fprintln(os.Stdout, "Usage: symroom artifact <link|unlink|list> [flags] [args]")
+			os.Exit(int(exitcodes.ExitOK))
+		}
+		sub := os.Args[2]
+		switch sub {
+		case "link":
+			fs := flag.NewFlagSet("artifact link", flag.ExitOnError)
+			titleFlag := fs.String("title", "", "Artifact title")
+			idFlag := fs.String("identity", "", "Author identity name")
+			if err := fs.Parse(os.Args[3:]); err != nil {
+				os.Exit(int(exitcodes.ExitNoInput))
+			}
+			if fs.NArg() < 1 {
+				fmt.Fprintln(os.Stderr, "Usage: symroom artifact link <path> [--title ...] [--identity <name>]")
+				os.Exit(int(exitcodes.ExitNoInput))
+			}
+			filePath := fs.Arg(0)
+			idName := *idFlag
+			if idName == "" {
+				cfg := config.LoadOrExit()
+				idName = cfg.DefaultIdentity
+			}
+			if idName == "" {
+				fmt.Fprintln(os.Stderr, "Error: --identity is required when default_identity is not configured")
+				os.Exit(int(exitcodes.ExitNoInput))
+			}
+			id, err := identity.Load(idName)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "Error loading identity %s: %v\n", idName, err)
+				os.Exit(int(exitcodes.ExitNotFound))
+			}
+			ev, err := artifact.Link(".", "", filePath, *titleFlag, id)
+			if err != nil {
+				if errors.Is(err, artifact.ErrOutsideRoot) {
+					fmt.Fprintln(os.Stderr, "Error: path is outside artifact root")
+					os.Exit(int(exitcodes.ExitNoInput))
+				}
+				fmt.Fprintf(os.Stderr, "Error linking artifact: %v\n", err)
+				os.Exit(int(exitcodes.ExitGeneric))
+			}
+			fmt.Println(ev.ID)
+			os.Exit(int(exitcodes.ExitOK))
+
+		case "unlink":
+			fs := flag.NewFlagSet("artifact unlink", flag.ExitOnError)
+			idFlag := fs.String("identity", "", "Author identity name")
+			if err := fs.Parse(os.Args[3:]); err != nil {
+				os.Exit(int(exitcodes.ExitNoInput))
+			}
+			if fs.NArg() < 1 {
+				fmt.Fprintln(os.Stderr, "Usage: symroom artifact unlink <artifact_id> [--identity <name>]")
+				os.Exit(int(exitcodes.ExitNoInput))
+			}
+			artID := fs.Arg(0)
+			idName := *idFlag
+			if idName == "" {
+				cfg := config.LoadOrExit()
+				idName = cfg.DefaultIdentity
+			}
+			if idName == "" {
+				fmt.Fprintln(os.Stderr, "Error: --identity is required when default_identity is not configured")
+				os.Exit(int(exitcodes.ExitNoInput))
+			}
+			id, err := identity.Load(idName)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "Error loading identity %s: %v\n", idName, err)
+				os.Exit(int(exitcodes.ExitNotFound))
+			}
+			ev, err := artifact.Unlink(".", artID, id)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "Error unlinking artifact: %v\n", err)
+				os.Exit(int(exitcodes.ExitGeneric))
+			}
+			fmt.Println(ev.ID)
+			os.Exit(int(exitcodes.ExitOK))
+
+		case "list":
+			fs := flag.NewFlagSet("artifact list", flag.ExitOnError)
+			jsonFlag := fs.Bool("json", false, "Output artifacts as JSON")
+			if err := fs.Parse(os.Args[3:]); err != nil {
+				os.Exit(int(exitcodes.ExitNoInput))
+			}
+			list, err := artifact.List(".", "")
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "Error listing artifacts: %v\n", err)
+				os.Exit(int(exitcodes.ExitGeneric))
+			}
+			if *jsonFlag {
+				data, _ := json.MarshalIndent(list, "", "  ")
+				fmt.Println(string(data))
+			} else {
+				for _, ref := range list {
+					fmt.Printf("%s\t%s\t[%s]\t%s\n", ref.ID, ref.Path, ref.Status, ref.Title)
+				}
+			}
+			os.Exit(int(exitcodes.ExitOK))
+
+		default:
+			fmt.Fprintf(os.Stderr, "Unknown artifact action: %s\n", sub)
+			os.Exit(int(exitcodes.ExitNoInput))
+		}
+	case "run", "checkpoint", "watch",
 		"brain-profile", "doctor", "mcp":
 		fs := flag.NewFlagSet(subcommand, flag.ExitOnError)
 		fs.Usage = func() {
