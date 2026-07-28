@@ -2,13 +2,16 @@ package main
 
 import (
 	"encoding/hex"
+	"errors"
 	"flag"
 	"fmt"
 	"os"
+	"strings"
 
 	"github.com/danieljustus/symaira-corekit/exitcodes"
 	"github.com/danieljustus/symaira-room/internal/config"
 	"github.com/danieljustus/symaira-room/internal/identity"
+	"github.com/danieljustus/symaira-room/internal/members"
 	"github.com/danieljustus/symaira-room/internal/room"
 	"github.com/danieljustus/symaira-room/internal/version"
 )
@@ -227,7 +230,96 @@ func main() {
 			fmt.Fprintf(os.Stderr, "Unknown member action: %s\n", sub)
 			os.Exit(int(exitcodes.ExitNoInput))
 		}
-	case "note", "decide", "artifact",
+	case "note":
+		fs := flag.NewFlagSet("note", flag.ExitOnError)
+		idFlag := fs.String("identity", "", "Author identity name")
+		jsonFlag := fs.Bool("json", false, "Output event as JSON")
+		if err := fs.Parse(os.Args[2:]); err != nil {
+			os.Exit(int(exitcodes.ExitNoInput))
+		}
+		if fs.NArg() < 1 {
+			fmt.Fprintln(os.Stderr, "Usage: symroom note <message> [--identity <name>] [--json]")
+			os.Exit(int(exitcodes.ExitNoInput))
+		}
+		msg := fs.Arg(0)
+		idName := *idFlag
+		if idName == "" {
+			cfg := config.LoadOrExit()
+			idName = cfg.DefaultIdentity
+		}
+		if idName == "" {
+			fmt.Fprintln(os.Stderr, "Error: --identity is required when default_identity is not configured")
+			os.Exit(int(exitcodes.ExitNoInput))
+		}
+		id, err := identity.Load(idName)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error loading identity %s: %v\n", idName, err)
+			os.Exit(int(exitcodes.ExitNotFound))
+		}
+		ev, err := room.PostNote(".", msg, id)
+		if err != nil {
+			if errors.Is(err, members.ErrObserverForbidden) {
+				fmt.Fprintln(os.Stderr, "Error: observer role has read-only access")
+				os.Exit(int(exitcodes.ExitGeneric))
+			}
+			fmt.Fprintf(os.Stderr, "Error posting note: %v\n", err)
+			os.Exit(int(exitcodes.ExitGeneric))
+		}
+		if *jsonFlag {
+			data, _ := ev.MarshalJSONLine()
+			fmt.Print(string(data))
+		} else {
+			fmt.Println(ev.ID)
+		}
+		os.Exit(int(exitcodes.ExitOK))
+	case "decide":
+		fs := flag.NewFlagSet("decide", flag.ExitOnError)
+		idFlag := fs.String("identity", "", "Author identity name")
+		refsFlag := fs.String("refs", "", "Comma-separated reference IDs")
+		jsonFlag := fs.Bool("json", false, "Output event as JSON")
+		if err := fs.Parse(os.Args[2:]); err != nil {
+			os.Exit(int(exitcodes.ExitNoInput))
+		}
+		if fs.NArg() < 1 {
+			fmt.Fprintln(os.Stderr, "Usage: symroom decide <decision> [--refs ref1,ref2] [--identity <name>] [--json]")
+			os.Exit(int(exitcodes.ExitNoInput))
+		}
+		msg := fs.Arg(0)
+		idName := *idFlag
+		if idName == "" {
+			cfg := config.LoadOrExit()
+			idName = cfg.DefaultIdentity
+		}
+		if idName == "" {
+			fmt.Fprintln(os.Stderr, "Error: --identity is required when default_identity is not configured")
+			os.Exit(int(exitcodes.ExitNoInput))
+		}
+		id, err := identity.Load(idName)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error loading identity %s: %v\n", idName, err)
+			os.Exit(int(exitcodes.ExitNotFound))
+		}
+		var refs []string
+		if *refsFlag != "" {
+			refs = strings.Split(*refsFlag, ",")
+		}
+		ev, err := room.RecordDecision(".", msg, refs, id)
+		if err != nil {
+			if errors.Is(err, members.ErrObserverForbidden) {
+				fmt.Fprintln(os.Stderr, "Error: observer role has read-only access")
+				os.Exit(int(exitcodes.ExitGeneric))
+			}
+			fmt.Fprintf(os.Stderr, "Error recording decision: %v\n", err)
+			os.Exit(int(exitcodes.ExitGeneric))
+		}
+		if *jsonFlag {
+			data, _ := ev.MarshalJSONLine()
+			fmt.Print(string(data))
+		} else {
+			fmt.Println(ev.ID)
+		}
+		os.Exit(int(exitcodes.ExitOK))
+	case "artifact",
 		"log", "verify", "index", "run", "checkpoint", "watch",
 		"brain-profile", "doctor", "mcp":
 		fs := flag.NewFlagSet(subcommand, flag.ExitOnError)
