@@ -1,6 +1,7 @@
 package artifact
 
 import (
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -11,6 +12,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/danieljustus/symaira-room/internal/desk"
 	"github.com/danieljustus/symaira-room/internal/event"
 	"github.com/danieljustus/symaira-room/internal/identity"
 	"github.com/danieljustus/symaira-room/internal/journal"
@@ -82,12 +84,17 @@ func Link(roomDir, artifactRoot, filePath, title string, id *identity.Identity) 
 		title = filepath.Base(relPath)
 	}
 
+	symdeskID := ""
+	if res, err := desk.InspectPath(context.Background(), absPath); err == nil && res != nil {
+		symdeskID = res.DocumentID
+	}
+
 	bodyMap := map[string]string{
 		"artifact_id": artID,
 		"path":        relPath,
 		"sha256":      hash,
 		"title":       title,
-		"symdesk_id":  "",
+		"symdesk_id":  symdeskID,
 	}
 	bodyBytes, _ := json.Marshal(bodyMap)
 
