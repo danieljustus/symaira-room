@@ -17,6 +17,7 @@ import (
 	"github.com/danieljustus/symaira-corekit/exitcodes"
 	"github.com/danieljustus/symaira-room/internal/approval"
 	"github.com/danieljustus/symaira-room/internal/artifact"
+	"github.com/danieljustus/symaira-room/internal/brainprofile"
 	"github.com/danieljustus/symaira-room/internal/config"
 	"github.com/danieljustus/symaira-room/internal/desk"
 	"github.com/danieljustus/symaira-room/internal/identity"
@@ -962,7 +963,39 @@ func main() {
 			os.Exit(int(exitcodes.ExitNoInput))
 		}
 
-	case "brain-profile", "doctor", "mcp":
+	case "brain-profile":
+		fs := flag.NewFlagSet("brain-profile", flag.ExitOnError)
+		memberFlag := fs.String("member", "", "Member ID for the agent")
+		installFlag := fs.Bool("install", false, "Install profile to symbrain config path")
+		if err := fs.Parse(os.Args[2:]); err != nil {
+			os.Exit(int(exitcodes.ExitNoInput))
+		}
+
+		if *memberFlag == "" {
+			fmt.Fprintln(os.Stderr, "Usage: symroom brain-profile --member <id> [--install]")
+			os.Exit(int(exitcodes.ExitNoInput))
+		}
+
+		content, prof, err := brainprofile.Generate(".", *memberFlag)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error generating brain profile: %v\n", err)
+			os.Exit(int(exitcodes.ExitGeneric))
+		}
+
+		if *installFlag {
+			msg, err := brainprofile.Install(prof.Name, content)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "Error installing profile: %v\n", err)
+				os.Exit(int(exitcodes.ExitGeneric))
+			}
+			fmt.Println(msg)
+		} else {
+			fmt.Println(content)
+			fmt.Printf("# To install run:\n# symbrain install --harness <harness> --profile %s\n", prof.Name)
+		}
+		os.Exit(int(exitcodes.ExitOK))
+
+	case "doctor", "mcp":
 		fs := flag.NewFlagSet(subcommand, flag.ExitOnError)
 		fs.Usage = func() {
 			fmt.Fprintf(os.Stderr, "Usage: symroom %s [flags]\n", subcommand)
