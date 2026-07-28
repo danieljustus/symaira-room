@@ -7,11 +7,13 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/danieljustus/symaira-corekit/exitcodes"
 	"github.com/danieljustus/symaira-room/internal/config"
 	"github.com/danieljustus/symaira-room/internal/identity"
+	"github.com/danieljustus/symaira-room/internal/index"
 	"github.com/danieljustus/symaira-room/internal/journal"
 	"github.com/danieljustus/symaira-room/internal/members"
 	"github.com/danieljustus/symaira-room/internal/room"
@@ -393,8 +395,25 @@ func main() {
 			}
 		}
 		os.Exit(int(exitcodes.ExitOK))
+	case "index":
+		if len(os.Args) < 3 || os.Args[2] != "rebuild" {
+			fmt.Println("Usage: symroom index rebuild")
+			os.Exit(int(exitcodes.ExitOK))
+		}
+
+		j := journal.New("journal")
+		dbPath := filepath.Join(".symroom", "index.sqlite")
+		indexer := index.New(dbPath)
+
+		if err := indexer.Rebuild(j); err != nil {
+			fmt.Fprintf(os.Stderr, "Error rebuilding index: %v\n", err)
+			os.Exit(int(exitcodes.ExitGeneric))
+		}
+
+		fmt.Printf("Rebuilt derived index at %s\n", dbPath)
+		os.Exit(int(exitcodes.ExitOK))
 	case "artifact",
-		"index", "run", "checkpoint", "watch",
+		"run", "checkpoint", "watch",
 		"brain-profile", "doctor", "mcp":
 		fs := flag.NewFlagSet(subcommand, flag.ExitOnError)
 		fs.Usage = func() {
