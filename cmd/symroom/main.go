@@ -6,6 +6,7 @@ import (
 	"os"
 
 	"github.com/danieljustus/symaira-corekit/exitcodes"
+	"github.com/danieljustus/symaira-room/internal/version"
 )
 
 const usageText = `symroom - room management and coordination tool
@@ -43,9 +44,24 @@ func main() {
 	subcommand := os.Args[1]
 
 	switch subcommand {
+	case "version":
+		fs := flag.NewFlagSet("version", flag.ExitOnError)
+		jsonFlag := fs.Bool("json", false, "Emit version info in JSON format")
+		if err := fs.Parse(os.Args[2:]); err != nil {
+			os.Exit(int(exitcodes.ExitNoInput))
+		}
+		info := version.GetInfo()
+		if *jsonFlag {
+			if err := info.Write(os.Stdout); err != nil {
+				os.Exit(int(exitcodes.ExitGeneric))
+			}
+		} else {
+			fmt.Println(info.String())
+		}
+		os.Exit(int(exitcodes.ExitOK))
 	case "init", "identity", "member", "note", "decide", "artifact",
 		"log", "verify", "index", "run", "checkpoint", "watch",
-		"brain-profile", "doctor", "version", "mcp":
+		"brain-profile", "doctor", "mcp":
 		fs := flag.NewFlagSet(subcommand, flag.ExitOnError)
 		fs.Usage = func() {
 			fmt.Fprintf(os.Stderr, "Usage: symroom %s [flags]\n", subcommand)

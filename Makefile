@@ -1,9 +1,12 @@
+VERSION ?= dev
+LDFLAGS := -X github.com/danieljustus/symaira-room/internal/version.Version=$(VERSION)
+
 .PHONY: build test test-race lint fmt-check clean
 
 CGO_ENABLED ?= 0
 
 build:
-	CGO_ENABLED=$(CGO_ENABLED) go build -o bin/symroom ./cmd/symroom
+	CGO_ENABLED=$(CGO_ENABLED) go build -ldflags "$(LDFLAGS)" -o bin/symroom ./cmd/symroom
 
 test:
 	go test -v ./...
