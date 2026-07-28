@@ -29,6 +29,7 @@
 | Record | signed room journal | hash-chain call audit |
 
 > Feature requests for per-call ask/deny, risk classes or schema pinning belong in `symaira-guard` and must be redirected there.
+> See [docs/approval-contract.md](docs/approval-contract.md) for the frozen approval backend interface contract.
 
 ### Room ↔ Brain Boundary
 Room-scoped agent rights are expressed as a `symbrain` profile that `symroom` *emits*; `symroom` never evaluates exposure policy and never imports `symbrain`.
