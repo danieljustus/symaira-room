@@ -7,7 +7,9 @@ import (
 	"os"
 
 	"github.com/danieljustus/symaira-corekit/exitcodes"
+	"github.com/danieljustus/symaira-room/internal/config"
 	"github.com/danieljustus/symaira-room/internal/identity"
+	"github.com/danieljustus/symaira-room/internal/room"
 	"github.com/danieljustus/symaira-room/internal/version"
 )
 
@@ -135,7 +137,48 @@ func main() {
 			fmt.Fprintf(os.Stderr, "Unknown identity action: %s\n", action)
 			os.Exit(int(exitcodes.ExitNoInput))
 		}
-	case "init", "member", "note", "decide", "artifact",
+	case "init":
+		fs := flag.NewFlagSet("init", flag.ExitOnError)
+		nameFlag := fs.String("name", "Default Room", "Room display name")
+		idFlag := fs.String("identity", "", "Owner identity name")
+		if err := fs.Parse(os.Args[2:]); err != nil {
+			os.Exit(int(exitcodes.ExitNoInput))
+		}
+
+		targetDir := "."
+		if fs.NArg() > 0 {
+			targetDir = fs.Arg(0)
+		}
+
+		idName := *idFlag
+		if idName == "" {
+			cfg := config.LoadOrExit()
+			idName = cfg.DefaultIdentity
+		}
+		if idName == "" && fs.NArg() == 0 {
+			fmt.Println("Usage: symroom init <dir> --identity <name> [--name <display_name>]")
+			os.Exit(int(exitcodes.ExitOK))
+		}
+		if idName == "" {
+			fmt.Fprintln(os.Stderr, "Error: --identity is required when default_identity is not configured")
+			os.Exit(int(exitcodes.ExitNoInput))
+		}
+
+		id, err := identity.Load(idName)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error loading identity %s: %v\n", idName, err)
+			os.Exit(int(exitcodes.ExitNotFound))
+		}
+
+		roomCfg, err := room.Init(targetDir, *nameFlag, id)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error initializing room: %v\n", err)
+			os.Exit(int(exitcodes.ExitGeneric))
+		}
+
+		fmt.Printf("Initialized room %s in %s (owner: %s)\n", roomCfg.ID, targetDir, id.Name)
+		os.Exit(int(exitcodes.ExitOK))
+	case "member", "note", "decide", "artifact",
 		"log", "verify", "index", "run", "checkpoint", "watch",
 		"brain-profile", "doctor", "mcp":
 		fs := flag.NewFlagSet(subcommand, flag.ExitOnError)
