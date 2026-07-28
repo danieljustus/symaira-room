@@ -211,3 +211,62 @@ func List(roomDir, artifactRoot string) ([]*ArtifactRef, error) {
 
 	return result, nil
 }
+
+func HandleDeskEvent(roomDir, artifactRoot string, item *desk.EventStreamItem, id *identity.Identity) error {
+	if artifactRoot == "" {
+		artifactRoot = roomDir
+	}
+	activeArtifacts, err := List(roomDir, artifactRoot)
+	if err != nil {
+		return err
+	}
+
+	relPath, err := MakeRelativePath(item.Path, artifactRoot)
+	if err != nil {
+		relPath = item.Path
+	}
+
+	var targetRef *ArtifactRef
+	for _, ref := range activeArtifacts {
+		if ref.Path == relPath || filepath.Clean(ref.Path) == filepath.Clean(relPath) {
+			targetRef = ref
+			break
+		}
+	}
+
+	if targetRef == nil {
+		return nil
+	}
+
+	absPath := filepath.Join(artifactRoot, targetRef.Path)
+	newHash, err := ComputeSHA256(absPath)
+	if err != nil && item.Event != "file_removed" {
+		return nil
+	}
+
+	bodyMap := map[string]string{
+		"artifact_id": targetRef.ID,
+		"path":        targetRef.Path,
+		"sha256":      newHash,
+		"event_type":  item.Event,
+	}
+	bodyBytes, _ := json.Marshal(bodyMap)
+
+	j := journal.New(filepath.Join(roomDir, "journal"))
+	ev := &event.Event{
+		V:      event.CurrentVersion,
+		ID:     "ev_" + journal.ComputeLineHash([]byte(targetRef.ID + newHash + item.Event))[7:23],
+		Room:   "rm_test",
+		Author: id.MemberID,
+		Kind:   event.KindArtifactChanged,
+		Body:   json.RawMessage(bodyBytes),
+	}
+
+	if err := j.PrepareEvent(ev); err != nil {
+		return err
+	}
+	if err := ev.Sign(id); err != nil {
+		return err
+	}
+	return j.Append(ev)
+}

@@ -1,18 +1,22 @@
 package main
 
 import (
+	"context"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
 	"os"
+	"os/signal"
 	"path/filepath"
 	"strings"
+	"syscall"
 
 	"github.com/danieljustus/symaira-corekit/exitcodes"
 	"github.com/danieljustus/symaira-room/internal/artifact"
 	"github.com/danieljustus/symaira-room/internal/config"
+	"github.com/danieljustus/symaira-room/internal/desk"
 	"github.com/danieljustus/symaira-room/internal/identity"
 	"github.com/danieljustus/symaira-room/internal/index"
 	"github.com/danieljustus/symaira-room/internal/journal"
@@ -516,7 +520,57 @@ func main() {
 			fmt.Fprintf(os.Stderr, "Unknown artifact action: %s\n", sub)
 			os.Exit(int(exitcodes.ExitNoInput))
 		}
-	case "run", "checkpoint", "watch",
+	case "watch":
+		fs := flag.NewFlagSet("watch", flag.ExitOnError)
+		deskVaultFlag := fs.String("desk", "", "Symdesk vault name to watch")
+		idFlag := fs.String("identity", "", "Author identity name")
+		if err := fs.Parse(os.Args[2:]); err != nil {
+			os.Exit(int(exitcodes.ExitNoInput))
+		}
+
+		if *deskVaultFlag == "" {
+			fmt.Println("Usage: symroom watch --desk <vault> [--identity <name>]")
+			os.Exit(int(exitcodes.ExitOK))
+		}
+
+		idName := *idFlag
+		if idName == "" {
+			cfg := config.LoadOrExit()
+			idName = cfg.DefaultIdentity
+		}
+		if idName == "" {
+			fmt.Fprintln(os.Stderr, "Error: --identity is required when default_identity is not configured")
+			os.Exit(int(exitcodes.ExitNoInput))
+		}
+
+		id, err := identity.Load(idName)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error loading identity %s: %v\n", idName, err)
+			os.Exit(int(exitcodes.ExitNotFound))
+		}
+
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+
+		sigCh := make(chan os.Signal, 1)
+		signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
+		go func() {
+			<-sigCh
+			cancel()
+		}()
+
+		handler := func(item *desk.EventStreamItem) error {
+			return artifact.HandleDeskEvent(".", "", item, id)
+		}
+
+		fmt.Printf("Watching symdesk vault %s...\n", *deskVaultFlag)
+		if err := desk.WatchDesk(ctx, *deskVaultFlag, handler); err != nil && !errors.Is(err, context.Canceled) {
+			fmt.Fprintf(os.Stderr, "Watch error: %v\n", err)
+			os.Exit(int(exitcodes.ExitGeneric))
+		}
+		os.Exit(int(exitcodes.ExitOK))
+
+	case "run", "checkpoint",
 		"brain-profile", "doctor", "mcp":
 		fs := flag.NewFlagSet(subcommand, flag.ExitOnError)
 		fs.Usage = func() {
