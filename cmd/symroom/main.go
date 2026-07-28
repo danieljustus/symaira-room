@@ -22,6 +22,7 @@ import (
 	"github.com/danieljustus/symaira-room/internal/journal"
 	"github.com/danieljustus/symaira-room/internal/members"
 	"github.com/danieljustus/symaira-room/internal/room"
+	"github.com/danieljustus/symaira-room/internal/run"
 	"github.com/danieljustus/symaira-room/internal/version"
 )
 
@@ -570,7 +571,186 @@ func main() {
 		}
 		os.Exit(int(exitcodes.ExitOK))
 
-	case "run", "checkpoint",
+	case "run":
+		if len(os.Args) < 3 {
+			fmt.Fprintln(os.Stdout, "Usage: symroom run <request|list|show|start|cancel> [flags] [args]")
+			os.Exit(int(exitcodes.ExitOK))
+		}
+		sub := os.Args[2]
+		switch sub {
+		case "request":
+			fs := flag.NewFlagSet("run request", flag.ExitOnError)
+			titleFlag := fs.String("title", "", "Run title")
+			planFlag := fs.String("plan-file", "", "Plan file path")
+			adapterFlag := fs.String("adapter", "", "Adapter name")
+			idFlag := fs.String("identity", "", "Author identity name")
+			if err := fs.Parse(os.Args[3:]); err != nil {
+				os.Exit(int(exitcodes.ExitNoInput))
+			}
+			if *titleFlag == "" {
+				fmt.Fprintln(os.Stderr, "Error: --title is required")
+				os.Exit(int(exitcodes.ExitNoInput))
+			}
+			idName := *idFlag
+			if idName == "" {
+				cfg := config.LoadOrExit()
+				idName = cfg.DefaultIdentity
+			}
+			if idName == "" {
+				fmt.Fprintln(os.Stderr, "Error: --identity is required when default_identity is not configured")
+				os.Exit(int(exitcodes.ExitNoInput))
+			}
+			id, err := identity.Load(idName)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "Error loading identity %s: %v\n", idName, err)
+				os.Exit(int(exitcodes.ExitNotFound))
+			}
+			ev, err := run.Request(".", *titleFlag, *planFlag, *adapterFlag, id)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "Error requesting run: %v\n", err)
+				os.Exit(int(exitcodes.ExitGeneric))
+			}
+			fmt.Println(ev.ID)
+			os.Exit(int(exitcodes.ExitOK))
+
+		case "list":
+			fs := flag.NewFlagSet("run list", flag.ExitOnError)
+			pendingFlag := fs.Bool("pending", false, "Show pending runs only")
+			jsonFlag := fs.Bool("json", false, "Output as JSON")
+			if err := fs.Parse(os.Args[3:]); err != nil {
+				os.Exit(int(exitcodes.ExitNoInput))
+			}
+			runs, err := run.List(".", *pendingFlag)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "Error listing runs: %v\n", err)
+				os.Exit(int(exitcodes.ExitGeneric))
+			}
+			if *jsonFlag {
+				data, _ := json.MarshalIndent(runs, "", "  ")
+				fmt.Println(string(data))
+			} else {
+				for _, r := range runs {
+					fmt.Printf("%s\t[%s]\t%s\t%s\n", r.ID, r.State, r.Author, r.Title)
+				}
+			}
+			os.Exit(int(exitcodes.ExitOK))
+
+		case "show":
+			fs := flag.NewFlagSet("run show", flag.ExitOnError)
+			jsonFlag := fs.Bool("json", false, "Output as JSON")
+			if err := fs.Parse(os.Args[3:]); err != nil {
+				os.Exit(int(exitcodes.ExitNoInput))
+			}
+			if fs.NArg() < 1 {
+				fmt.Fprintln(os.Stderr, "Usage: symroom run show <run_id> [--json]")
+				os.Exit(int(exitcodes.ExitNoInput))
+			}
+			r, err := run.Get(".", fs.Arg(0))
+			if err != nil {
+				if errors.Is(err, run.ErrRunNotFound) {
+					fmt.Fprintf(os.Stderr, "Error: run %s not found\n", fs.Arg(0))
+					os.Exit(int(exitcodes.ExitNotFound))
+				}
+				fmt.Fprintf(os.Stderr, "Error showing run: %v\n", err)
+				os.Exit(int(exitcodes.ExitGeneric))
+			}
+			if *jsonFlag {
+				data, _ := json.MarshalIndent(r, "", "  ")
+				fmt.Println(string(data))
+			} else {
+				fmt.Printf("Run ID:     %s\n", r.ID)
+				fmt.Printf("Title:      %s\n", r.Title)
+				fmt.Printf("State:      %s\n", r.State)
+				fmt.Printf("Author:     %s\n", r.Author)
+				fmt.Printf("Created At: %s\n", r.CreatedAt)
+				if r.Summary != "" {
+					fmt.Printf("Summary:    %s\n", r.Summary)
+				}
+				if r.Error != "" {
+					fmt.Printf("Error:      %s\n", r.Error)
+				}
+			}
+			os.Exit(int(exitcodes.ExitOK))
+
+		case "start":
+			fs := flag.NewFlagSet("run start", flag.ExitOnError)
+			idFlag := fs.String("identity", "", "Author identity name")
+			if err := fs.Parse(os.Args[3:]); err != nil {
+				os.Exit(int(exitcodes.ExitNoInput))
+			}
+			if fs.NArg() < 1 {
+				fmt.Fprintln(os.Stderr, "Usage: symroom run start <run_id> [--identity <name>]")
+				os.Exit(int(exitcodes.ExitNoInput))
+			}
+			idName := *idFlag
+			if idName == "" {
+				cfg := config.LoadOrExit()
+				idName = cfg.DefaultIdentity
+			}
+			if idName == "" {
+				fmt.Fprintln(os.Stderr, "Error: --identity is required when default_identity is not configured")
+				os.Exit(int(exitcodes.ExitNoInput))
+			}
+			id, err := identity.Load(idName)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "Error loading identity %s: %v\n", idName, err)
+				os.Exit(int(exitcodes.ExitNotFound))
+			}
+			ev, err := run.Start(".", fs.Arg(0), id)
+			if err != nil {
+				if errors.Is(err, run.ErrInvalidTransition) {
+					fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+					os.Exit(int(exitcodes.ExitNoInput))
+				}
+				fmt.Fprintf(os.Stderr, "Error starting run: %v\n", err)
+				os.Exit(int(exitcodes.ExitGeneric))
+			}
+			fmt.Println(ev.ID)
+			os.Exit(int(exitcodes.ExitOK))
+
+		case "cancel":
+			fs := flag.NewFlagSet("run cancel", flag.ExitOnError)
+			reasonFlag := fs.String("reason", "", "Reason for cancellation")
+			idFlag := fs.String("identity", "", "Author identity name")
+			if err := fs.Parse(os.Args[3:]); err != nil {
+				os.Exit(int(exitcodes.ExitNoInput))
+			}
+			if fs.NArg() < 1 {
+				fmt.Fprintln(os.Stderr, "Usage: symroom run cancel <run_id> [--reason ...] [--identity <name>]")
+				os.Exit(int(exitcodes.ExitNoInput))
+			}
+			idName := *idFlag
+			if idName == "" {
+				cfg := config.LoadOrExit()
+				idName = cfg.DefaultIdentity
+			}
+			if idName == "" {
+				fmt.Fprintln(os.Stderr, "Error: --identity is required when default_identity is not configured")
+				os.Exit(int(exitcodes.ExitNoInput))
+			}
+			id, err := identity.Load(idName)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "Error loading identity %s: %v\n", idName, err)
+				os.Exit(int(exitcodes.ExitNotFound))
+			}
+			ev, err := run.Cancel(".", fs.Arg(0), *reasonFlag, id)
+			if err != nil {
+				if errors.Is(err, run.ErrInvalidTransition) {
+					fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+					os.Exit(int(exitcodes.ExitNoInput))
+				}
+				fmt.Fprintf(os.Stderr, "Error cancelling run: %v\n", err)
+				os.Exit(int(exitcodes.ExitGeneric))
+			}
+			fmt.Println(ev.ID)
+			os.Exit(int(exitcodes.ExitOK))
+
+		default:
+			fmt.Fprintf(os.Stderr, "Unknown run action: %s\n", sub)
+			os.Exit(int(exitcodes.ExitNoInput))
+		}
+
+	case "checkpoint",
 		"brain-profile", "doctor", "mcp":
 		fs := flag.NewFlagSet(subcommand, flag.ExitOnError)
 		fs.Usage = func() {
