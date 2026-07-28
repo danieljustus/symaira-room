@@ -32,20 +32,21 @@ const (
 )
 
 type Run struct {
-	ID         string   `json:"id"`
-	Title      string   `json:"title"`
-	PlanFile   string   `json:"plan_file,omitempty"`
-	Adapter    string   `json:"adapter,omitempty"`
-	State      State    `json:"state"`
-	Author     string   `json:"author"`
-	CreatedAt  string   `json:"created_at"`
-	UpdatedAt  string   `json:"updated_at"`
-	ApprovalID string   `json:"approval_id,omitempty"`
-	Scope      string   `json:"scope,omitempty"`
-	ExpiresAt  string   `json:"expires_at,omitempty"`
-	Summary    string   `json:"summary,omitempty"`
-	Error      string   `json:"error,omitempty"`
-	Artifacts  []string `json:"artifacts,omitempty"`
+	ID          string        `json:"id"`
+	Title       string        `json:"title"`
+	PlanFile    string        `json:"plan_file,omitempty"`
+	Adapter     string        `json:"adapter,omitempty"`
+	State       State         `json:"state"`
+	Author      string        `json:"author"`
+	CreatedAt   string        `json:"created_at"`
+	UpdatedAt   string        `json:"updated_at"`
+	ApprovalID  string        `json:"approval_id,omitempty"`
+	Scope       string        `json:"scope,omitempty"`
+	ExpiresAt   string        `json:"expires_at,omitempty"`
+	Summary     string        `json:"summary,omitempty"`
+	Error       string        `json:"error,omitempty"`
+	Artifacts   []string      `json:"artifacts,omitempty"`
+	Checkpoints []*Checkpoint `json:"checkpoints,omitempty"`
 }
 
 func Request(roomDir, title, planFile, adapter string, id *identity.Identity) (*event.Event, error) {
@@ -351,6 +352,14 @@ func ProjectRuns(events []*event.Event) map[string]*Run {
 			}
 		}
 	}
+
+	chks := ProjectCheckpoints(events)
+	for _, chk := range chks {
+		if r, exists := runs[chk.RunID]; exists {
+			r.Checkpoints = append(r.Checkpoints, chk)
+		}
+	}
+
 	return runs
 }
 

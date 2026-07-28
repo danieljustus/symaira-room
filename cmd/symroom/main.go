@@ -860,8 +860,109 @@ func main() {
 			os.Exit(int(exitcodes.ExitNoInput))
 		}
 
-	case "checkpoint",
-		"brain-profile", "doctor", "mcp":
+	case "checkpoint":
+		if len(os.Args) < 3 {
+			fmt.Fprintln(os.Stdout, "Usage: symroom checkpoint <request|resolve> [flags] [args]")
+			os.Exit(int(exitcodes.ExitOK))
+		}
+		sub := os.Args[2]
+		switch sub {
+		case "request":
+			fs := flag.NewFlagSet("checkpoint request", flag.ExitOnError)
+			runFlag := fs.String("run", "", "Run ID")
+			qFlag := fs.String("question", "", "Question string")
+			timeoutFlag := fs.Duration("timeout", 15*time.Minute, "Wait timeout duration")
+			idFlag := fs.String("identity", "", "Author identity name")
+			if err := fs.Parse(os.Args[3:]); err != nil {
+				os.Exit(int(exitcodes.ExitNoInput))
+			}
+			if *runFlag == "" || *qFlag == "" {
+				fmt.Fprintln(os.Stderr, "Usage: symroom checkpoint request --run <id> --question \"...\" [--identity <name>]")
+				os.Exit(int(exitcodes.ExitNoInput))
+			}
+			idName := *idFlag
+			if idName == "" {
+				cfg := config.LoadOrExit()
+				idName = cfg.DefaultIdentity
+			}
+			if idName == "" {
+				fmt.Fprintln(os.Stderr, "Error: --identity is required when default_identity is not configured")
+				os.Exit(int(exitcodes.ExitNoInput))
+			}
+			id, err := identity.Load(idName)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "Error loading identity %s: %v\n", idName, err)
+				os.Exit(int(exitcodes.ExitNotFound))
+			}
+			ev, err := run.RequestCheckpoint(".", *runFlag, *qFlag, id)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "Error requesting checkpoint: %v\n", err)
+				os.Exit(int(exitcodes.ExitGeneric))
+			}
+			var b struct {
+				CheckpointID string `json:"checkpoint_id"`
+			}
+			_ = json.Unmarshal(ev.Body, &b)
+
+			ctx, cancel := context.WithTimeout(context.Background(), *timeoutFlag)
+			defer cancel()
+
+			chk, err := run.WaitCheckpoint(ctx, ".", b.CheckpointID, 500*time.Millisecond)
+			if err != nil {
+				if errors.Is(err, run.ErrWaitTimeout) {
+					fmt.Fprintf(os.Stderr, "Error: wait timed out for checkpoint %s\n", b.CheckpointID)
+					os.Exit(11)
+				}
+				fmt.Fprintf(os.Stderr, "Error waiting for checkpoint: %v\n", err)
+				os.Exit(int(exitcodes.ExitGeneric))
+			}
+			fmt.Println(chk.Answer)
+			os.Exit(int(exitcodes.ExitOK))
+
+		case "resolve":
+			fs := flag.NewFlagSet("checkpoint resolve", flag.ExitOnError)
+			answerFlag := fs.String("answer", "", "Answer string")
+			idFlag := fs.String("identity", "", "Author identity name")
+			if err := fs.Parse(os.Args[3:]); err != nil {
+				os.Exit(int(exitcodes.ExitNoInput))
+			}
+			if fs.NArg() < 1 || *answerFlag == "" {
+				fmt.Fprintln(os.Stderr, "Usage: symroom checkpoint resolve <checkpoint_id> --answer \"...\" [--identity <name>]")
+				os.Exit(int(exitcodes.ExitNoInput))
+			}
+			chkID := fs.Arg(0)
+			idName := *idFlag
+			if idName == "" {
+				cfg := config.LoadOrExit()
+				idName = cfg.DefaultIdentity
+			}
+			if idName == "" {
+				fmt.Fprintln(os.Stderr, "Error: --identity is required when default_identity is not configured")
+				os.Exit(int(exitcodes.ExitNoInput))
+			}
+			id, err := identity.Load(idName)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "Error loading identity %s: %v\n", idName, err)
+				os.Exit(int(exitcodes.ExitNotFound))
+			}
+			ev, err := run.ResolveCheckpoint(".", chkID, *answerFlag, id)
+			if err != nil {
+				if errors.Is(err, run.ErrAgentCheckpointResolveForbidden) {
+					fmt.Fprintln(os.Stderr, "Error: agent identity is forbidden from resolving checkpoints")
+					os.Exit(int(exitcodes.ExitNoInput))
+				}
+				fmt.Fprintf(os.Stderr, "Error resolving checkpoint: %v\n", err)
+				os.Exit(int(exitcodes.ExitGeneric))
+			}
+			fmt.Println(ev.ID)
+			os.Exit(int(exitcodes.ExitOK))
+
+		default:
+			fmt.Fprintf(os.Stderr, "Unknown checkpoint action: %s\n", sub)
+			os.Exit(int(exitcodes.ExitNoInput))
+		}
+
+	case "brain-profile", "doctor", "mcp":
 		fs := flag.NewFlagSet(subcommand, flag.ExitOnError)
 		fs.Usage = func() {
 			fmt.Fprintf(os.Stderr, "Usage: symroom %s [flags]\n", subcommand)
