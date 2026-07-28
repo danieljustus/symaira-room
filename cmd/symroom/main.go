@@ -353,8 +353,48 @@ func main() {
 			os.Exit(int(exitcodes.ExitGeneric))
 		}
 		os.Exit(int(exitcodes.ExitOK))
+	case "log":
+		fs := flag.NewFlagSet("log", flag.ExitOnError)
+		sinceFlag := fs.String("since", "", "Filter events since RFC3339 timestamp")
+		untilFlag := fs.String("until", "", "Filter events until RFC3339 timestamp")
+		kindFlag := fs.String("kind", "", "Filter events by kind")
+		authorFlag := fs.String("author", "", "Filter events by author member ID")
+		runFlag := fs.String("run", "", "Filter events by run ID")
+		limitFlag := fs.Int("limit", 0, "Limit number of events returned")
+		jsonFlag := fs.Bool("json", false, "Output events as NDJSON")
+		if err := fs.Parse(os.Args[2:]); err != nil {
+			os.Exit(int(exitcodes.ExitNoInput))
+		}
+
+		j := journal.New("journal")
+		res, err := j.QueryLog(journal.LogFilter{
+			Since:  *sinceFlag,
+			Until:  *untilFlag,
+			Kind:   *kindFlag,
+			Author: *authorFlag,
+			Run:    *runFlag,
+			Limit:  *limitFlag,
+		})
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error querying log: %v\n", err)
+			os.Exit(int(exitcodes.ExitGeneric))
+		}
+
+		journal.PrintLogWarnings(res.InvalidCount)
+
+		if *jsonFlag {
+			for _, ev := range res.Events {
+				line, _ := ev.MarshalJSONLine()
+				fmt.Print(string(line))
+			}
+		} else {
+			for _, ev := range res.Events {
+				fmt.Println(journal.FormatEventHuman(ev))
+			}
+		}
+		os.Exit(int(exitcodes.ExitOK))
 	case "artifact",
-		"log", "index", "run", "checkpoint", "watch",
+		"index", "run", "checkpoint", "watch",
 		"brain-profile", "doctor", "mcp":
 		fs := flag.NewFlagSet(subcommand, flag.ExitOnError)
 		fs.Usage = func() {

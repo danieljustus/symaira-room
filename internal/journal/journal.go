@@ -37,16 +37,9 @@ func ComputeLineHash(line []byte) string {
 	return "sha256:" + hex.EncodeToString(h[:])
 }
 
-func (j *Journal) Append(ev *event.Event) error {
-	j.mu.Lock()
-	defer j.mu.Unlock()
-
-	if err := os.MkdirAll(j.Dir, 0755); err != nil {
-		return fmt.Errorf("mkdir journal dir: %w", err)
-	}
-
-	if ev.Lamport == 0 {
-		maxL, _ := j.maxLamportUnlocked()
+func (j *Journal) PrepareEvent(ev *event.Event) error {
+	maxL, _ := j.MaxLamport()
+	if ev.Lamport <= maxL {
 		ev.Lamport = maxL + 1
 	}
 
@@ -58,6 +51,30 @@ func (j *Journal) Append(ev *event.Event) error {
 
 	ev.Seq = lastSeq + 1
 	ev.Prev = lastHash
+	return nil
+}
+
+func (j *Journal) Append(ev *event.Event) error {
+	j.mu.Lock()
+	defer j.mu.Unlock()
+
+	if err := os.MkdirAll(j.Dir, 0755); err != nil {
+		return fmt.Errorf("mkdir journal dir: %w", err)
+	}
+
+	segPath := j.SegmentPath(ev.Author)
+	if ev.Seq == 0 {
+		lastSeq, lastHash, err := readLastSegmentStats(segPath)
+		if err != nil {
+			return err
+		}
+		ev.Seq = lastSeq + 1
+		ev.Prev = lastHash
+	}
+	if ev.Lamport == 0 {
+		maxL, _ := j.maxLamportUnlocked()
+		ev.Lamport = maxL + 1
+	}
 
 	line, err := ev.MarshalJSONLine()
 	if err != nil {
