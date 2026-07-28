@@ -12,8 +12,10 @@ import (
 	"path/filepath"
 	"strings"
 	"syscall"
+	"time"
 
 	"github.com/danieljustus/symaira-corekit/exitcodes"
+	"github.com/danieljustus/symaira-room/internal/approval"
 	"github.com/danieljustus/symaira-room/internal/artifact"
 	"github.com/danieljustus/symaira-room/internal/config"
 	"github.com/danieljustus/symaira-room/internal/desk"
@@ -740,6 +742,77 @@ func main() {
 					os.Exit(int(exitcodes.ExitNoInput))
 				}
 				fmt.Fprintf(os.Stderr, "Error cancelling run: %v\n", err)
+				os.Exit(int(exitcodes.ExitGeneric))
+			}
+			fmt.Println(ev.ID)
+			os.Exit(int(exitcodes.ExitOK))
+
+		case "approve":
+			fs := flag.NewFlagSet("run approve", flag.ExitOnError)
+			scopeFlag := fs.String("scope", "all", "Approval scope")
+			ttlFlag := fs.Duration("ttl", 30*time.Minute, "Approval TTL duration")
+			idFlag := fs.String("identity", "", "Author identity name")
+			if err := fs.Parse(os.Args[3:]); err != nil {
+				os.Exit(int(exitcodes.ExitNoInput))
+			}
+			if fs.NArg() < 1 {
+				fmt.Fprintln(os.Stderr, "Usage: symroom run approve <run_id> [--scope ...] [--ttl 30m] [--identity <name>]")
+				os.Exit(int(exitcodes.ExitNoInput))
+			}
+			idName := *idFlag
+			if idName == "" {
+				cfg := config.LoadOrExit()
+				idName = cfg.DefaultIdentity
+			}
+			if idName == "" {
+				fmt.Fprintln(os.Stderr, "Error: --identity is required when default_identity is not configured")
+				os.Exit(int(exitcodes.ExitNoInput))
+			}
+			id, err := identity.Load(idName)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "Error loading identity %s: %v\n", idName, err)
+				os.Exit(int(exitcodes.ExitNotFound))
+			}
+			ev, err := approval.Approve(".", fs.Arg(0), *scopeFlag, *ttlFlag, id)
+			if err != nil {
+				if errors.Is(err, approval.ErrAgentApprovalForbidden) {
+					fmt.Fprintln(os.Stderr, "Error: agent identity is forbidden from approving runs")
+					os.Exit(int(exitcodes.ExitNoInput))
+				}
+				fmt.Fprintf(os.Stderr, "Error approving run: %v\n", err)
+				os.Exit(int(exitcodes.ExitGeneric))
+			}
+			fmt.Println(ev.ID)
+			os.Exit(int(exitcodes.ExitOK))
+
+		case "deny":
+			fs := flag.NewFlagSet("run deny", flag.ExitOnError)
+			reasonFlag := fs.String("reason", "", "Reason for denial")
+			idFlag := fs.String("identity", "", "Author identity name")
+			if err := fs.Parse(os.Args[3:]); err != nil {
+				os.Exit(int(exitcodes.ExitNoInput))
+			}
+			if fs.NArg() < 1 || *reasonFlag == "" {
+				fmt.Fprintln(os.Stderr, "Usage: symroom run deny <run_id> --reason ... [--identity <name>]")
+				os.Exit(int(exitcodes.ExitNoInput))
+			}
+			idName := *idFlag
+			if idName == "" {
+				cfg := config.LoadOrExit()
+				idName = cfg.DefaultIdentity
+			}
+			if idName == "" {
+				fmt.Fprintln(os.Stderr, "Error: --identity is required when default_identity is not configured")
+				os.Exit(int(exitcodes.ExitNoInput))
+			}
+			id, err := identity.Load(idName)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "Error loading identity %s: %v\n", idName, err)
+				os.Exit(int(exitcodes.ExitNotFound))
+			}
+			ev, err := approval.Deny(".", fs.Arg(0), *reasonFlag, id)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "Error denying run: %v\n", err)
 				os.Exit(int(exitcodes.ExitGeneric))
 			}
 			fmt.Println(ev.ID)

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"path/filepath"
 	"sort"
+	"time"
 
 	"github.com/danieljustus/symaira-room/internal/event"
 	"github.com/danieljustus/symaira-room/internal/identity"
@@ -15,6 +16,7 @@ import (
 var (
 	ErrRunNotFound       = errors.New("run not found")
 	ErrInvalidTransition = errors.New("invalid run state transition")
+	ErrApprovalExpired   = errors.New("run approval has expired")
 )
 
 type State string
@@ -30,17 +32,20 @@ const (
 )
 
 type Run struct {
-	ID        string   `json:"id"`
-	Title     string   `json:"title"`
-	PlanFile  string   `json:"plan_file,omitempty"`
-	Adapter   string   `json:"adapter,omitempty"`
-	State     State    `json:"state"`
-	Author    string   `json:"author"`
-	CreatedAt string   `json:"created_at"`
-	UpdatedAt string   `json:"updated_at"`
-	Summary   string   `json:"summary,omitempty"`
-	Error     string   `json:"error,omitempty"`
-	Artifacts []string `json:"artifacts,omitempty"`
+	ID         string   `json:"id"`
+	Title      string   `json:"title"`
+	PlanFile   string   `json:"plan_file,omitempty"`
+	Adapter    string   `json:"adapter,omitempty"`
+	State      State    `json:"state"`
+	Author     string   `json:"author"`
+	CreatedAt  string   `json:"created_at"`
+	UpdatedAt  string   `json:"updated_at"`
+	ApprovalID string   `json:"approval_id,omitempty"`
+	Scope      string   `json:"scope,omitempty"`
+	ExpiresAt  string   `json:"expires_at,omitempty"`
+	Summary    string   `json:"summary,omitempty"`
+	Error      string   `json:"error,omitempty"`
+	Artifacts  []string `json:"artifacts,omitempty"`
 }
 
 func Request(roomDir, title, planFile, adapter string, id *identity.Identity) (*event.Event, error) {
@@ -88,6 +93,11 @@ func Start(roomDir, runID string, id *identity.Identity) (*event.Event, error) {
 	}
 	if r.State != StateApproved {
 		return nil, fmt.Errorf("%w: cannot start run in state '%s' (must be 'approved')", ErrInvalidTransition, r.State)
+	}
+	if r.ExpiresAt != "" {
+		if t, err := time.Parse(time.RFC3339, r.ExpiresAt); err == nil && time.Now().After(t) {
+			return nil, fmt.Errorf("%w: approval expired at %s", ErrApprovalExpired, r.ExpiresAt)
+		}
 	}
 
 	bodyMap := map[string]string{
@@ -260,11 +270,17 @@ func ProjectRuns(events []*event.Event) map[string]*Run {
 
 		case event.KindRunApproved:
 			var b struct {
-				RunID string `json:"run_id"`
+				RunID      string `json:"run_id"`
+				ApprovalID string `json:"approval_id"`
+				Scope      string `json:"scope"`
+				ExpiresAt  string `json:"expires_at"`
 			}
 			if err := json.Unmarshal(ev.Body, &b); err == nil {
 				if r, exists := runs[b.RunID]; exists {
 					r.State = StateApproved
+					r.ApprovalID = b.ApprovalID
+					r.Scope = b.Scope
+					r.ExpiresAt = b.ExpiresAt
 					r.UpdatedAt = ev.TS
 				}
 			}
