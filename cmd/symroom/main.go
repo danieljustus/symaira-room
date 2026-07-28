@@ -1,11 +1,13 @@
 package main
 
 import (
+	"encoding/hex"
 	"flag"
 	"fmt"
 	"os"
 
 	"github.com/danieljustus/symaira-corekit/exitcodes"
+	"github.com/danieljustus/symaira-room/internal/identity"
 	"github.com/danieljustus/symaira-room/internal/version"
 )
 
@@ -59,7 +61,81 @@ func main() {
 			fmt.Println(info.String())
 		}
 		os.Exit(int(exitcodes.ExitOK))
-	case "init", "identity", "member", "note", "decide", "artifact",
+	case "identity":
+		if len(os.Args) < 3 {
+			fmt.Fprintln(os.Stdout, "Usage: symroom identity <create|list|show|export> [args]")
+			os.Exit(int(exitcodes.ExitOK))
+		}
+		action := os.Args[2]
+		switch action {
+		case "create":
+			if len(os.Args) < 4 {
+				fmt.Fprintln(os.Stderr, "Usage: symroom identity create <name>")
+				os.Exit(int(exitcodes.ExitNoInput))
+			}
+			name := os.Args[3]
+			id, err := identity.Generate(name)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "Error generating identity: %v\n", err)
+				os.Exit(int(exitcodes.ExitGeneric))
+			}
+			if err := identity.Save(id); err != nil {
+				fmt.Fprintf(os.Stderr, "Error saving identity: %v\n", err)
+				os.Exit(int(exitcodes.ExitGeneric))
+			}
+			fmt.Printf("Created identity %s (%s)\n", id.Name, id.MemberID)
+			os.Exit(int(exitcodes.ExitOK))
+		case "list":
+			names, err := identity.List()
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "Error listing identities: %v\n", err)
+				os.Exit(int(exitcodes.ExitGeneric))
+			}
+			for _, n := range names {
+				fmt.Println(n)
+			}
+			os.Exit(int(exitcodes.ExitOK))
+		case "show":
+			if len(os.Args) < 4 {
+				fmt.Fprintln(os.Stderr, "Usage: symroom identity show <name>")
+				os.Exit(int(exitcodes.ExitNoInput))
+			}
+			name := os.Args[3]
+			id, err := identity.Load(name)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "Error loading identity: %v\n", err)
+				os.Exit(int(exitcodes.ExitNotFound))
+			}
+			fmt.Printf("Name: %s\nMember ID: %s\nPublic Key: %x\n", id.Name, id.MemberID, id.PublicKey)
+			os.Exit(int(exitcodes.ExitOK))
+		case "export":
+			fs := flag.NewFlagSet("identity export", flag.ExitOnError)
+			pubFlag := fs.Bool("public", false, "Export public key only")
+			if err := fs.Parse(os.Args[3:]); err != nil {
+				os.Exit(int(exitcodes.ExitNoInput))
+			}
+			if fs.NArg() < 1 {
+				fmt.Fprintln(os.Stderr, "Usage: symroom identity export <name> --public")
+				os.Exit(int(exitcodes.ExitNoInput))
+			}
+			name := fs.Arg(0)
+			id, err := identity.Load(name)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "Error loading identity: %v\n", err)
+				os.Exit(int(exitcodes.ExitNotFound))
+			}
+			if *pubFlag {
+				fmt.Println(hex.EncodeToString(id.PublicKey))
+			} else {
+				fmt.Fprintf(os.Stderr, "Exporting private key is forbidden for security\n")
+				os.Exit(int(exitcodes.ExitForbidden))
+			}
+			os.Exit(int(exitcodes.ExitOK))
+		default:
+			fmt.Fprintf(os.Stderr, "Unknown identity action: %s\n", action)
+			os.Exit(int(exitcodes.ExitNoInput))
+		}
+	case "init", "member", "note", "decide", "artifact",
 		"log", "verify", "index", "run", "checkpoint", "watch",
 		"brain-profile", "doctor", "mcp":
 		fs := flag.NewFlagSet(subcommand, flag.ExitOnError)
