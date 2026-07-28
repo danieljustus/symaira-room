@@ -123,9 +123,6 @@ func (j *Journal) readSegmentUnlocked(author string) ([]*event.Event, error) {
 	defer f.Close()
 
 	var events []*event.Event
-	var prevHash = "sha256:0000000000000000000000000000000000000000000000000000000000000000"
-	var expectedSeq uint64 = 1
-
 	scanner := bufio.NewScanner(f)
 	for scanner.Scan() {
 		line := scanner.Bytes()
@@ -136,20 +133,53 @@ func (j *Journal) readSegmentUnlocked(author string) ([]*event.Event, error) {
 		if err != nil {
 			return nil, fmt.Errorf("unmarshal line: %w", err)
 		}
-
-		if ev.Seq != expectedSeq {
-			return nil, fmt.Errorf("%w: author %s expected seq %d, got %d", ErrSeqMismatch, author, expectedSeq, ev.Seq)
-		}
-		if ev.Prev != prevHash {
-			return nil, fmt.Errorf("%w: author %s seq %d expected prev %s, got %s", ErrChainBroken, author, ev.Seq, prevHash, ev.Prev)
-		}
-
 		events = append(events, ev)
-		prevHash = ComputeLineHash(line)
-		expectedSeq++
 	}
 
 	return events, nil
+}
+
+func (j *Journal) VerifyChain(author string) error {
+	j.mu.RLock()
+	defer j.mu.RUnlock()
+
+	events, err := j.readSegmentUnlocked(author)
+	if err != nil {
+		return err
+	}
+	segPath := j.SegmentPath(author)
+	f, err := os.Open(segPath)
+	if err != nil {
+		if os.IsNotExist(err) && len(events) == 0 {
+			return nil
+		}
+		return err
+	}
+	defer f.Close()
+
+	lines, err := readLines(f)
+	if err != nil {
+		return err
+	}
+
+	var prevHash = "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+	var expectedSeq uint64 = 1
+
+	for idx, lineBytes := range lines {
+		if idx >= len(events) {
+			break
+		}
+		ev := events[idx]
+		if ev.Seq != expectedSeq {
+			return fmt.Errorf("%w: author %s expected seq %d, got %d", ErrSeqMismatch, author, expectedSeq, ev.Seq)
+		}
+		if ev.Prev != prevHash {
+			return fmt.Errorf("%w: author %s seq %d expected prev %s, got %s", ErrChainBroken, author, ev.Seq, prevHash, ev.Prev)
+		}
+		prevHash = ComputeLineHash(lineBytes)
+		expectedSeq++
+	}
+	return nil
 }
 
 func (j *Journal) ReadAllSegments() (map[string][]*event.Event, error) {

@@ -96,7 +96,7 @@ func TestChainTamperingDetection(t *testing.T) {
 		t.Fatalf("failed to write tampered segment: %v", err)
 	}
 
-	_, err = j.ReadSegment(id.MemberID)
+	err = j.VerifyChain(id.MemberID)
 	if err == nil {
 		t.Fatalf("expected chain tampering detection, got nil error")
 	}

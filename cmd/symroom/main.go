@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
@@ -11,6 +12,7 @@ import (
 	"github.com/danieljustus/symaira-corekit/exitcodes"
 	"github.com/danieljustus/symaira-room/internal/config"
 	"github.com/danieljustus/symaira-room/internal/identity"
+	"github.com/danieljustus/symaira-room/internal/journal"
 	"github.com/danieljustus/symaira-room/internal/members"
 	"github.com/danieljustus/symaira-room/internal/room"
 	"github.com/danieljustus/symaira-room/internal/version"
@@ -238,8 +240,8 @@ func main() {
 			os.Exit(int(exitcodes.ExitNoInput))
 		}
 		if fs.NArg() < 1 {
-			fmt.Fprintln(os.Stderr, "Usage: symroom note <message> [--identity <name>] [--json]")
-			os.Exit(int(exitcodes.ExitNoInput))
+			fmt.Println("Usage: symroom note <message> [--identity <name>] [--json]")
+			os.Exit(int(exitcodes.ExitOK))
 		}
 		msg := fs.Arg(0)
 		idName := *idFlag
@@ -281,8 +283,8 @@ func main() {
 			os.Exit(int(exitcodes.ExitNoInput))
 		}
 		if fs.NArg() < 1 {
-			fmt.Fprintln(os.Stderr, "Usage: symroom decide <decision> [--refs ref1,ref2] [--identity <name>] [--json]")
-			os.Exit(int(exitcodes.ExitNoInput))
+			fmt.Println("Usage: symroom decide <decision> [--refs ref1,ref2] [--identity <name>] [--json]")
+			os.Exit(int(exitcodes.ExitOK))
 		}
 		msg := fs.Arg(0)
 		idName := *idFlag
@@ -319,8 +321,40 @@ func main() {
 			fmt.Println(ev.ID)
 		}
 		os.Exit(int(exitcodes.ExitOK))
+	case "verify":
+		fs := flag.NewFlagSet("verify", flag.ExitOnError)
+		jsonFlag := fs.Bool("json", false, "Output verification findings as JSON")
+		if err := fs.Parse(os.Args[2:]); err != nil {
+			os.Exit(int(exitcodes.ExitNoInput))
+		}
+
+		j := journal.New("journal")
+		report, err := j.Verify()
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error verifying journal: %v\n", err)
+			os.Exit(int(exitcodes.ExitGeneric))
+		}
+
+		if *jsonFlag {
+			data, _ := json.MarshalIndent(report, "", "  ")
+			fmt.Println(string(data))
+		} else {
+			if report.Valid {
+				fmt.Println("Journal verification PASSED: zero findings")
+			} else {
+				fmt.Printf("Journal verification FAILED: %d finding(s):\n", len(report.Findings))
+				for _, f := range report.Findings {
+					fmt.Printf("  - [%s] %s (event: %s, author: %s)\n", f.Code, f.Message, f.EventID, f.Author)
+				}
+			}
+		}
+
+		if !report.Valid {
+			os.Exit(int(exitcodes.ExitGeneric))
+		}
+		os.Exit(int(exitcodes.ExitOK))
 	case "artifact",
-		"log", "verify", "index", "run", "checkpoint", "watch",
+		"log", "index", "run", "checkpoint", "watch",
 		"brain-profile", "doctor", "mcp":
 		fs := flag.NewFlagSet(subcommand, flag.ExitOnError)
 		fs.Usage = func() {
