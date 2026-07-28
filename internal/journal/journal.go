@@ -45,6 +45,11 @@ func (j *Journal) Append(ev *event.Event) error {
 		return fmt.Errorf("mkdir journal dir: %w", err)
 	}
 
+	if ev.Lamport == 0 {
+		maxL, _ := j.maxLamportUnlocked()
+		ev.Lamport = maxL + 1
+	}
+
 	segPath := j.SegmentPath(ev.Author)
 	lastSeq, lastHash, err := readLastSegmentStats(segPath)
 	if err != nil {
@@ -151,6 +156,10 @@ func (j *Journal) ReadAllSegments() (map[string][]*event.Event, error) {
 	j.mu.RLock()
 	defer j.mu.RUnlock()
 
+	return j.readAllSegmentsUnlocked()
+}
+
+func (j *Journal) readAllSegmentsUnlocked() (map[string][]*event.Event, error) {
 	entries, err := os.ReadDir(j.Dir)
 	if err != nil {
 		if os.IsNotExist(err) {
