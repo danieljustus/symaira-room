@@ -747,6 +747,43 @@ func main() {
 			fmt.Println(ev.ID)
 			os.Exit(int(exitcodes.ExitOK))
 
+		case "wait":
+			fs := flag.NewFlagSet("run wait", flag.ExitOnError)
+			timeoutFlag := fs.Duration("timeout", 15*time.Minute, "Timeout duration")
+			jsonFlag := fs.Bool("json", false, "Output as JSON")
+			if err := fs.Parse(os.Args[3:]); err != nil {
+				os.Exit(int(exitcodes.ExitNoInput))
+			}
+			if fs.NArg() < 1 {
+				fmt.Fprintln(os.Stderr, "Usage: symroom run wait <run_id> [--timeout 15m] [--json]")
+				os.Exit(int(exitcodes.ExitNoInput))
+			}
+			runID := fs.Arg(0)
+			ctx, cancel := context.WithTimeout(context.Background(), *timeoutFlag)
+			defer cancel()
+
+			r, err := run.Wait(ctx, ".", runID, 500*time.Millisecond)
+			if err != nil {
+				if errors.Is(err, run.ErrWaitTimeout) {
+					fmt.Fprintf(os.Stderr, "Error: wait timed out for run %s\n", runID)
+					os.Exit(11)
+				}
+				if errors.Is(err, run.ErrRunDenied) {
+					fmt.Fprintf(os.Stderr, "Error: run %s was denied\n", runID)
+					os.Exit(10)
+				}
+				fmt.Fprintf(os.Stderr, "Error waiting for run %s: %v\n", runID, err)
+				os.Exit(int(exitcodes.ExitGeneric))
+			}
+
+			if *jsonFlag {
+				data, _ := json.MarshalIndent(r, "", "  ")
+				fmt.Println(string(data))
+			} else {
+				fmt.Printf("Run %s approved [%s]\n", r.ID, r.Scope)
+			}
+			os.Exit(int(exitcodes.ExitOK))
+
 		case "approve":
 			fs := flag.NewFlagSet("run approve", flag.ExitOnError)
 			scopeFlag := fs.String("scope", "all", "Approval scope")
