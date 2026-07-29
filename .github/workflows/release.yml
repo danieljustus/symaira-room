@@ -1,0 +1,64 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*.*.*']
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: Build every release target without publishing, signing, or requiring secrets
+        required: false
+        default: true
+        type: boolean
+
+env:
+  GO_VERSION: '1.26.5'
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+      - name: Validate release configuration
+        uses: goreleaser/goreleaser-action@v6
+        with:
+          distribution: goreleaser
+          version: '~> v2'
+          args: check
+      - name: Install release tools
+        if: ${{ github.event_name == 'push' || inputs.dry_run == false }}
+        run: |
+          set -euo pipefail
+          curl -sSfL https://raw.githubusercontent.com/sigstore/cosign/main/install.sh | sh -s -- -b "$RUNNER_TEMP/bin"
+          curl -sSfL https://raw.githubusercontent.com/anchore/syft/main/install.sh | sh -s -- -b "$RUNNER_TEMP/bin"
+          echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
+      - name: Dry-run build (all targets, no secrets)
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run == true }}
+        uses: goreleaser/goreleaser-action@v6
+        with:
+          distribution: goreleaser
+          version: '~> v2'
+          args: release --snapshot --clean --skip=sign,sbom,publish
+      - name: Document release inputs
+        if: ${{ github.event_name == 'push' || inputs.dry_run == false }}
+        run: |
+          echo 'Release publishing requires GITHUB_TOKEN and GitHub Actions id-token: write permission for keyless cosign.'
+          echo 'No signing secret is needed: cosign uses the workflow OIDC identity.'
+      - name: Publish signed release with SBOMs
+        if: ${{ github.event_name == 'push' || inputs.dry_run == false }}
+        uses: goreleaser/goreleaser-action@v6
+        with:
+          distribution: goreleaser
+          version: '~> v2'
+          args: release --clean
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          COSIGN_ID_TOKEN: ${{ secrets.COSIGN_ID_TOKEN }}
