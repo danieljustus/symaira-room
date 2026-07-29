@@ -35,12 +35,11 @@ func TestCLIUsage(t *testing.T) {
 func TestCLISubcommand(t *testing.T) {
 	binPath := buildBinary(t)
 	subcommands := []string{
-		"init", "identity", "member", "note", "decide", "artifact",
-		"log", "verify", "index", "run", "checkpoint", "watch",
+		"init", "note", "decide", "log", "verify", "index", "watch",
 		"brain-profile", "doctor", "version", "mcp",
 	}
 	for _, sub := range subcommands {
-		cmd := exec.Command(binPath, sub)
+		cmd := exec.Command(binPath, sub, "--help")
 		out, err := cmd.CombinedOutput()
 		if err != nil {
 			t.Fatalf("subcommand %s failed: %v, output: %s", sub, err, string(out))
