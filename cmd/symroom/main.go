@@ -20,6 +20,7 @@ import (
 	"github.com/danieljustus/symaira-room/internal/brainprofile"
 	"github.com/danieljustus/symaira-room/internal/config"
 	"github.com/danieljustus/symaira-room/internal/desk"
+	"github.com/danieljustus/symaira-room/internal/doctor"
 	"github.com/danieljustus/symaira-room/internal/identity"
 	"github.com/danieljustus/symaira-room/internal/index"
 	"github.com/danieljustus/symaira-room/internal/journal"
@@ -995,16 +996,43 @@ func main() {
 		}
 		os.Exit(int(exitcodes.ExitOK))
 
-	case "doctor", "mcp":
-		fs := flag.NewFlagSet(subcommand, flag.ExitOnError)
-		fs.Usage = func() {
-			fmt.Fprintf(os.Stderr, "Usage: symroom %s [flags]\n", subcommand)
-			fs.PrintDefaults()
-		}
+	case "doctor":
+		fs := flag.NewFlagSet("doctor", flag.ExitOnError)
+		jsonFlag := fs.Bool("json", false, "Emit stable machine-readable JSON")
 		if err := fs.Parse(os.Args[2:]); err != nil {
 			os.Exit(int(exitcodes.ExitNoInput))
 		}
-		fmt.Printf("symroom %s stub\n", subcommand)
+		report, err := doctor.Run(".")
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error running doctor: %v\n", err)
+			os.Exit(int(exitcodes.ExitGeneric))
+		}
+		if *jsonFlag {
+			data, _ := json.MarshalIndent(report, "", "  ")
+			fmt.Println(string(data))
+		} else {
+			for _, c := range report.Checks {
+				fmt.Printf("[%s] %s: %s\n  remediation: %s\n", strings.ToUpper(string(c.Status)), c.Name, c.Message, c.Remediation)
+			}
+			for _, t := range report.Tools {
+				fmt.Printf("[%s] %s: %s", strings.ToUpper(string(t.Status)), t.Name, t.Path)
+				if t.Version != "" {
+					fmt.Printf(" (%s)", t.Version)
+				}
+				fmt.Printf("\n  remediation: %s\n", t.Remediation)
+			}
+		}
+		if report.Failed {
+			os.Exit(int(exitcodes.ExitGeneric))
+		}
+		os.Exit(int(exitcodes.ExitOK))
+	case "mcp":
+		fs := flag.NewFlagSet("mcp", flag.ExitOnError)
+		fs.Usage = func() { fmt.Fprintf(os.Stderr, "Usage: symroom mcp [flags]\n"); fs.PrintDefaults() }
+		if err := fs.Parse(os.Args[2:]); err != nil {
+			os.Exit(int(exitcodes.ExitNoInput))
+		}
+		fmt.Println("symroom mcp stub")
 		os.Exit(int(exitcodes.ExitOK))
 	case "-h", "--help", "help":
 		fmt.Fprint(os.Stdout, usageText)
