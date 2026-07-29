@@ -1,0 +1,80 @@
+name: Homebrew Formula
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: Render the formula but do not push to the tap
+        required: false
+        default: true
+        type: boolean
+
+env:
+  TAP_REPOSITORY: danieljustus/homebrew-tap
+  FORMULA_PATH: Formula/symroom.rb
+
+jobs:
+  formula:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - name: Render formula (dry-run-safe)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_TAG: ${{ github.event.release.tag_name || github.ref_name }}
+        run: |
+          set -euo pipefail
+          test -n "$RELEASE_TAG" || { echo 'A release tag is required.' >&2; exit 1; }
+          release_json="$(gh api "repos/${GITHUB_REPOSITORY}/releases/tags/${RELEASE_TAG}")"
+          version="${RELEASE_TAG#v}"
+          base="https://github.com/${GITHUB_REPOSITORY}/releases/download/${RELEASE_TAG}"
+          arm_name="symroom_${version}_darwin_arm64.tar.gz"
+          amd_name="symroom_${version}_darwin_amd64.tar.gz"
+          arm_sha="$(printf '%s' "$release_json" | jq -r --arg n "$arm_name" '.assets[] | select(.name == $n) | .digest' | cut -d: -f2)"
+          amd_sha="$(printf '%s' "$release_json" | jq -r --arg n "$amd_name" '.assets[] | select(.name == $n) | .digest' | cut -d: -f2)"
+          test -n "$arm_sha" -a "$arm_sha" != null -a -n "$amd_sha" -a "$amd_sha" != null
+          mkdir -p "$(dirname "$FORMULA_PATH")"
+          printf '%s\n' \
+            'class Symroom < Formula' \
+            '  desc "Shared, verifiable work record for projects"' \
+            "  homepage \"https://github.com/${GITHUB_REPOSITORY}\"" \
+            "  version \"${version}\"" \
+            '  license "MIT"' \
+            '' \
+            '  on_macos do' \
+            '    if Hardware::CPU.arm?' \
+            "      url \"${base}/symroom_${version}_darwin_arm64.tar.gz\"" \
+            "      sha256 \"${arm_sha}\"" \
+            '    else' \
+            "      url \"${base}/symroom_${version}_darwin_amd64.tar.gz\"" \
+            "      sha256 \"${amd_sha}\"" \
+            '    end' \
+            '  end' \
+            '' \
+            '  def install' \
+            '    bin.install "symroom"' \
+            '  end' \
+            '' \
+            '  test do' \
+            '    assert_match "symroom", shell_output("#{bin}/symroom --help")' \
+            '  end' \
+            'end' > "$FORMULA_PATH"
+      - name: Publish formula to canonical tap
+        if: ${{ github.event_name == 'release' || inputs.dry_run == false }}
+        env:
+          TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+        run: |
+          set -euo pipefail
+          test -n "$TAP_TOKEN" || { echo 'HOMEBREW_TAP_TOKEN is required only for publishing.' >&2; exit 1; }
+          git clone "https://x-access-token:${TAP_TOKEN}@github.com/${TAP_REPOSITORY}.git" tap
+          mkdir -p "tap/$(dirname "$FORMULA_PATH")"
+          cp "$FORMULA_PATH" "tap/$FORMULA_PATH"
+          git -C tap config user.name github-actions[bot]
+          git -C tap config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git -C tap add "$FORMULA_PATH"
+          git -C tap diff --cached --quiet || git -C tap commit -m "symroom ${RELEASE_TAG:-${GITHUB_REF_NAME}}"
+          git -C tap push
