@@ -24,6 +24,7 @@ import (
 	"github.com/danieljustus/symaira-room/internal/identity"
 	"github.com/danieljustus/symaira-room/internal/index"
 	"github.com/danieljustus/symaira-room/internal/journal"
+	"github.com/danieljustus/symaira-room/internal/mcp"
 	"github.com/danieljustus/symaira-room/internal/members"
 	"github.com/danieljustus/symaira-room/internal/room"
 	"github.com/danieljustus/symaira-room/internal/run"
@@ -1028,11 +1029,30 @@ func main() {
 		os.Exit(int(exitcodes.ExitOK))
 	case "mcp":
 		fs := flag.NewFlagSet("mcp", flag.ExitOnError)
-		fs.Usage = func() { fmt.Fprintf(os.Stderr, "Usage: symroom mcp [flags]\n"); fs.PrintDefaults() }
+		roomDir := fs.String("room", ".", "Room directory")
+		identityName := fs.String("identity", "", "Signing identity name")
+		artifactRoot := fs.String("artifact-root", "", "Artifact root directory")
 		if err := fs.Parse(os.Args[2:]); err != nil {
 			os.Exit(int(exitcodes.ExitNoInput))
 		}
-		fmt.Println("symroom mcp stub")
+		name := *identityName
+		if name == "" {
+			cfg := config.LoadOrExit()
+			name = cfg.DefaultIdentity
+		}
+		if name == "" {
+			fmt.Fprintln(os.Stderr, "Error: --identity is required")
+			os.Exit(int(exitcodes.ExitNoInput))
+		}
+		id, err := identity.Load(name)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error loading identity: %v\n", err)
+			os.Exit(int(exitcodes.ExitNotFound))
+		}
+		if err := mcp.NewServer(*roomDir, id, *artifactRoot).ServeStdio(context.Background()); err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			os.Exit(int(exitcodes.ExitGeneric))
+		}
 		os.Exit(int(exitcodes.ExitOK))
 	case "-h", "--help", "help":
 		fmt.Fprint(os.Stdout, usageText)
