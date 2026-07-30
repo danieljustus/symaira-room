@@ -1,0 +1,36 @@
+name: Feature Request
+description: Suggest an idea for this project
+title: "feat: "
+labels: [type: feature, priority: medium]
+body:
+  - type: textarea
+    id: goal
+    attributes:
+      label: Goal
+      description: What should be achieved
+    validations:
+      required: true
+  - type: textarea
+    id: why
+    attributes:
+      label: Why Now
+      description: Evidence or urgency for this feature
+    validations:
+      required: true
+  - type: textarea
+    id: current
+    attributes:
+      label: Current State
+      description: What exists today and what's missing
+    validations:
+      required: false
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance Criteria
+      description: Concrete checklist for when this is done
+      placeholder: |
+        - [ ] Criterion 1
+        - [ ] Criterion 2
+    validations:
+      required: true
