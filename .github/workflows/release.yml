@@ -33,11 +33,10 @@ jobs:
           distribution: goreleaser
           version: '~> v2'
           args: check
-      - name: Install release tools
-        if: ${{ github.event_name == 'push' || inputs.dry_run == false }}
+      - name: Install cosign
+        uses: sigstore/cosign-installer@v3.8.1
+      - name: Install syft
         run: |
-          set -euo pipefail
-          curl -sSfL https://raw.githubusercontent.com/sigstore/cosign/main/install.sh | sh -s -- -b "$RUNNER_TEMP/bin"
           curl -sSfL https://raw.githubusercontent.com/anchore/syft/main/install.sh | sh -s -- -b "$RUNNER_TEMP/bin"
           echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
       - name: Dry-run build (all targets, no secrets)
