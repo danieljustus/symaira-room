@@ -5,21 +5,19 @@ on:
     branches: [ main ]
     paths-ignore:
       - 'docs/**'
-      - '**.md'
-      - 'LICENSE'
-      - '.github/ISSUE_TEMPLATE/**'
   pull_request:
     branches: [ main ]
     paths-ignore:
       - 'docs/**'
-      - '**.md'
-      - 'LICENSE'
-      - '.github/ISSUE_TEMPLATE/**'
 
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
+
+permissions:
+  contents: read
+
 jobs:
   ci:
     name: Build & Test
