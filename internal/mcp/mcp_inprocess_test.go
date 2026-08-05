@@ -303,8 +303,8 @@ func TestCheckpointRequestHandlerInProcess(t *testing.T) {
 // ---- Full protocol path (ServeIO) -----------------------------------------
 
 // toolResult mirrors the tools/call response envelope produced by mcpserver.
-// Note: mcpserver interpolates the marshalled handler result *raw* into the
-// text field (not as an escaped JSON string), so Text must be RawMessage.
+// Since corekit v0.8.0 the text field is a proper JSON string (the MCP spec
+// requires TextContent.text to be a string), so text() decodes it.
 type toolResult struct {
 	Content []struct {
 		Type string          `json:"type"`
@@ -313,10 +313,15 @@ type toolResult struct {
 	IsError bool `json:"isError"`
 }
 
-// text returns the raw handler-result JSON carried by the first content item.
+// text returns the handler-result payload of the first content item: the
+// decoded text string, or the raw field bytes when it is not a JSON string.
 func (tr toolResult) text() string {
 	if len(tr.Content) == 0 {
 		return ""
+	}
+	var s string
+	if err := json.Unmarshal(tr.Content[0].Text, &s); err == nil {
+		return s
 	}
 	return string(tr.Content[0].Text)
 }
