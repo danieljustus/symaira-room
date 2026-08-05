@@ -58,7 +58,7 @@ func ReadJournalStats(roomDir string) (*JournalStats, error) {
 				}
 				_ = state.ApplyEvent(ev)
 			}
-			f.Close()
+			_ = f.Close()
 		}
 	}
 
@@ -77,7 +77,7 @@ func GetAuthorStats(roomDir, authorID string) (seq uint64, prevHash string, err 
 		}
 		return 0, "", err
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	var lastLine []byte
 	var count uint64
@@ -117,7 +117,7 @@ func AppendEvent(roomDir string, ev *event.Event) error {
 	if err != nil {
 		return fmt.Errorf("open journal file: %w", err)
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	if _, err := f.Write(line); err != nil {
 		return fmt.Errorf("write event line: %w", err)

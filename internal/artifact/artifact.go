@@ -37,7 +37,7 @@ func ComputeSHA256(path string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	h := sha256.New()
 	if _, err := io.Copy(h, f); err != nil {
@@ -164,7 +164,8 @@ func List(roomDir, artifactRoot string) ([]*ArtifactRef, error) {
 	active := make(map[string]*ArtifactRef)
 
 	for _, ev := range merged {
-		if ev.Kind == event.KindArtifactLinked {
+		switch ev.Kind {
+		case event.KindArtifactLinked:
 			var bodyMap struct {
 				ArtifactID string `json:"artifact_id"`
 				Path       string `json:"path"`
@@ -181,7 +182,7 @@ func List(roomDir, artifactRoot string) ([]*ArtifactRef, error) {
 					SymdeskID: bodyMap.SymdeskID,
 				}
 			}
-		} else if ev.Kind == event.KindArtifactUnlinked {
+		case event.KindArtifactUnlinked:
 			var bodyMap struct {
 				ArtifactID string `json:"artifact_id"`
 			}

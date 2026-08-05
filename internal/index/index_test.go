@@ -36,8 +36,12 @@ func TestRebuildIndex(t *testing.T) {
 		Kind:    event.KindRoomCreated,
 		Body:    json.RawMessage(bodyCreated),
 	}
-	evCreated.Sign(ownerID)
-	j.Append(evCreated)
+	if err := evCreated.Sign(ownerID); err != nil {
+		t.Fatalf("sign room.created: %v", err)
+	}
+	if err := j.Append(evCreated); err != nil {
+		t.Fatalf("append room.created: %v", err)
+	}
 
 	// Append note
 	evNote := &event.Event{
@@ -52,8 +56,12 @@ func TestRebuildIndex(t *testing.T) {
 		Kind:    event.KindNotePosted,
 		Body:    json.RawMessage(`{"text":"hello SQLite"}`),
 	}
-	evNote.Sign(ownerID)
-	j.Append(evNote)
+	if err := evNote.Sign(ownerID); err != nil {
+		t.Fatalf("sign note.posted: %v", err)
+	}
+	if err := j.Append(evNote); err != nil {
+		t.Fatalf("append note.posted: %v", err)
+	}
 
 	dbPath := filepath.Join(tempDir, ".symroom", "index.sqlite")
 	indexer := New(dbPath)
@@ -67,7 +75,7 @@ func TestRebuildIndex(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Open sqlite failed: %v", err)
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	var eventCount int
 	if err := db.QueryRow("SELECT COUNT(*) FROM events").Scan(&eventCount); err != nil {
@@ -86,7 +94,7 @@ func TestRebuildIndex(t *testing.T) {
 	}
 
 	// Delete index and rebuild again
-	db.Close()
+	_ = db.Close()
 	_ = os.Remove(dbPath)
 
 	if err := indexer.Rebuild(j); err != nil {
@@ -97,7 +105,7 @@ func TestRebuildIndex(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Open rebuilt sqlite failed: %v", err)
 	}
-	defer db2.Close()
+	defer func() { _ = db2.Close() }()
 
 	var rebuiltCount int
 	_ = db2.QueryRow("SELECT COUNT(*) FROM events").Scan(&rebuiltCount)

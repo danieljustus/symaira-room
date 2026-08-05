@@ -18,13 +18,17 @@ import (
 func TestCheckpointLifecycle(t *testing.T) {
 	tempDir := t.TempDir()
 	ownerID, _ := identity.Generate("owner")
-	room.Init(tempDir, "Test Room", ownerID)
+	if _, err := room.Init(tempDir, "Test Room", ownerID); err != nil {
+		t.Fatalf("Init room failed: %v", err)
+	}
 
 	evReq, _ := Request(tempDir, "Checkpoint Task", "", "", ownerID)
 	var bReq struct {
 		RunID string `json:"run_id"`
 	}
-	json.Unmarshal(evReq.Body, &bReq)
+	if err := json.Unmarshal(evReq.Body, &bReq); err != nil {
+		t.Fatalf("unmarshal request body: %v", err)
+	}
 	runID := bReq.RunID
 
 	// 1. Request checkpoint
@@ -35,7 +39,9 @@ func TestCheckpointLifecycle(t *testing.T) {
 	var bChk struct {
 		CheckpointID string `json:"checkpoint_id"`
 	}
-	json.Unmarshal(evChkReq.Body, &bChk)
+	if err := json.Unmarshal(evChkReq.Body, &bChk); err != nil {
+		t.Fatalf("unmarshal checkpoint body: %v", err)
+	}
 	chkID := bChk.CheckpointID
 
 	// 2. Verify checkpoint appears in run show
@@ -53,7 +59,9 @@ func TestCheckpointLifecycle(t *testing.T) {
 	// 3. Resolve checkpoint asynchronously
 	go func() {
 		time.Sleep(50 * time.Millisecond)
-		ResolveCheckpoint(tempDir, chkID, "Yes, proceed with migration", ownerID)
+		if _, err := ResolveCheckpoint(tempDir, chkID, "Yes, proceed with migration", ownerID); err != nil {
+			t.Errorf("ResolveCheckpoint failed: %v", err)
+		}
 	}()
 
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
@@ -71,7 +79,9 @@ func TestCheckpointLifecycle(t *testing.T) {
 func TestAgentCannotResolveCheckpoint(t *testing.T) {
 	tempDir := t.TempDir()
 	ownerID, _ := identity.Generate("owner")
-	room.Init(tempDir, "Test Room", ownerID)
+	if _, err := room.Init(tempDir, "Test Room", ownerID); err != nil {
+		t.Fatalf("Init room failed: %v", err)
+	}
 
 	agentID, _ := identity.Generate("bot_worker")
 
@@ -91,21 +101,31 @@ func TestAgentCannotResolveCheckpoint(t *testing.T) {
 		Kind:   event.KindMemberAdded,
 		Body:   json.RawMessage(agentBody),
 	}
-	j.PrepareEvent(evAdd)
-	evAdd.Sign(ownerID)
-	j.Append(evAdd)
+	if err := j.PrepareEvent(evAdd); err != nil {
+		t.Fatalf("PrepareEvent failed: %v", err)
+	}
+	if err := evAdd.Sign(ownerID); err != nil {
+		t.Fatalf("Sign failed: %v", err)
+	}
+	if err := j.Append(evAdd); err != nil {
+		t.Fatalf("Append failed: %v", err)
+	}
 
 	evReq, _ := Request(tempDir, "Bot Checkpoint Task", "", "", ownerID)
 	var bReq struct {
 		RunID string `json:"run_id"`
 	}
-	json.Unmarshal(evReq.Body, &bReq)
+	if err := json.Unmarshal(evReq.Body, &bReq); err != nil {
+		t.Fatalf("unmarshal request body: %v", err)
+	}
 
 	evChk, _ := RequestCheckpoint(tempDir, bReq.RunID, "Can agent resolve this?", agentID)
 	var bChk struct {
 		CheckpointID string `json:"checkpoint_id"`
 	}
-	json.Unmarshal(evChk.Body, &bChk)
+	if err := json.Unmarshal(evChk.Body, &bChk); err != nil {
+		t.Fatalf("unmarshal checkpoint body: %v", err)
+	}
 
 	// Agent tries to resolve -> forbidden
 	_, err := ResolveCheckpoint(tempDir, bChk.CheckpointID, "Self approved", agentID)

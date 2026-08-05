@@ -61,7 +61,7 @@ func (j *Journal) Verify() (*Report, error) {
 		}
 
 		lines, err := readLines(f)
-		f.Close()
+		_ = f.Close()
 		if err != nil {
 			report.Valid = false
 			report.Findings = append(report.Findings, Finding{

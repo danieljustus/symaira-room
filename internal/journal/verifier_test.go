@@ -75,15 +75,21 @@ func TestVerifyModifiedEvent(t *testing.T) {
 		Kind:   event.KindNotePosted,
 		Body:   json.RawMessage(`{"text":"hello"}`),
 	}
-	evNote.Sign(ownerID)
-	j.Append(evNote)
+	if err := evNote.Sign(ownerID); err != nil {
+		t.Fatalf("sign note event: %v", err)
+	}
+	if err := j.Append(evNote); err != nil {
+		t.Fatalf("append note event: %v", err)
+	}
 
 	// Tamper note line in file
 	segPath := j.SegmentPath(ownerID.MemberID)
 	data, _ := os.ReadFile(segPath)
 	lines := strings.Split(string(data), "\n")
 	lines[1] = strings.Replace(lines[1], `"hello"`, `"tampered"`, 1)
-	os.WriteFile(segPath, []byte(strings.Join(lines, "\n")), 0644)
+	if err := os.WriteFile(segPath, []byte(strings.Join(lines, "\n")), 0644); err != nil {
+		t.Fatalf("write tampered segment: %v", err)
+	}
 
 	report, err := j.Verify()
 	if err != nil {
@@ -126,8 +132,12 @@ func TestVerifyAgentApprovalForbidden(t *testing.T) {
 		Kind:   event.KindMemberAdded,
 		Body:   json.RawMessage(bodyAdded),
 	}
-	evAdded.Sign(ownerID)
-	j.Append(evAdded)
+	if err := evAdded.Sign(ownerID); err != nil {
+		t.Fatalf("sign member.added: %v", err)
+	}
+	if err := j.Append(evAdded); err != nil {
+		t.Fatalf("append member.added: %v", err)
+	}
 
 	// 2. Agent signs approval event (FORBIDDEN)
 	evApprove := &event.Event{
@@ -138,8 +148,12 @@ func TestVerifyAgentApprovalForbidden(t *testing.T) {
 		Kind:   event.KindRunApproved,
 		Body:   json.RawMessage(`{}`),
 	}
-	evApprove.Sign(agentID)
-	j.Append(evApprove)
+	if err := evApprove.Sign(agentID); err != nil {
+		t.Fatalf("sign approval event: %v", err)
+	}
+	if err := j.Append(evApprove); err != nil {
+		t.Fatalf("append approval event: %v", err)
+	}
 
 	report, err := j.Verify()
 	if err != nil {
@@ -167,10 +181,14 @@ func TestVerifyForkDetection(t *testing.T) {
 
 	// Create two different events with same seq=2 for owner
 	evA := &event.Event{V: 1, ID: "ev_fork_a", Room: "rm_test", Author: ownerID.MemberID, Seq: 2, Prev: "sha256:00", Kind: event.KindNotePosted, Body: json.RawMessage(`{"text":"a"}`)}
-	evA.Sign(ownerID)
+	if err := evA.Sign(ownerID); err != nil {
+		t.Fatalf("sign fork event A: %v", err)
+	}
 
 	evB := &event.Event{V: 1, ID: "ev_fork_b", Room: "rm_test", Author: ownerID.MemberID, Seq: 2, Prev: "sha256:00", Kind: event.KindNotePosted, Body: json.RawMessage(`{"text":"b"}`)}
-	evB.Sign(ownerID)
+	if err := evB.Sign(ownerID); err != nil {
+		t.Fatalf("sign fork event B: %v", err)
+	}
 
 	lineA, _ := evA.MarshalJSONLine()
 	lineB, _ := evB.MarshalJSONLine()
@@ -178,9 +196,13 @@ func TestVerifyForkDetection(t *testing.T) {
 	// Write both lines into segment
 	segPath := j.SegmentPath(ownerID.MemberID)
 	f, _ := os.OpenFile(segPath, os.O_WRONLY|os.O_APPEND, 0644)
-	f.Write(lineA)
-	f.Write(lineB)
-	f.Close()
+	if _, err := f.Write(lineA); err != nil {
+		t.Fatalf("write fork line A: %v", err)
+	}
+	if _, err := f.Write(lineB); err != nil {
+		t.Fatalf("write fork line B: %v", err)
+	}
+	_ = f.Close()
 
 	report, err := j.Verify()
 	if err != nil {

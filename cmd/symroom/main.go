@@ -83,7 +83,7 @@ func main() {
 		os.Exit(int(exitcodes.ExitOK))
 	case "identity":
 		if len(os.Args) < 3 {
-			fmt.Fprintln(os.Stdout, "Usage: symroom identity <create|list|show|export> [args]")
+			_, _ = fmt.Fprintln(os.Stdout, "Usage: symroom identity <create|list|show|export> [args]")
 			os.Exit(int(exitcodes.ExitOK))
 		}
 		action := os.Args[2]
@@ -198,7 +198,7 @@ func main() {
 		os.Exit(int(exitcodes.ExitOK))
 	case "member":
 		if len(os.Args) < 3 {
-			fmt.Fprintln(os.Stdout, "Usage: symroom member <add|list|remove|role> [flags] [args]")
+			_, _ = fmt.Fprintln(os.Stdout, "Usage: symroom member <add|list|remove|role> [flags] [args]")
 			os.Exit(int(exitcodes.ExitOK))
 		}
 		sub := os.Args[2]
@@ -425,7 +425,7 @@ func main() {
 		os.Exit(int(exitcodes.ExitOK))
 	case "artifact":
 		if len(os.Args) < 3 {
-			fmt.Fprintln(os.Stdout, "Usage: symroom artifact <link|unlink|list> [flags] [args]")
+			_, _ = fmt.Fprintln(os.Stdout, "Usage: symroom artifact <link|unlink|list> [flags] [args]")
 			os.Exit(int(exitcodes.ExitOK))
 		}
 		sub := os.Args[2]
@@ -578,7 +578,7 @@ func main() {
 
 	case "run":
 		if len(os.Args) < 3 {
-			fmt.Fprintln(os.Stdout, "Usage: symroom run <request|list|show|start|cancel> [flags] [args]")
+			_, _ = fmt.Fprintln(os.Stdout, "Usage: symroom run <request|list|show|start|cancel> [flags] [args]")
 			os.Exit(int(exitcodes.ExitOK))
 		}
 		sub := os.Args[2]
@@ -865,7 +865,7 @@ func main() {
 
 	case "checkpoint":
 		if len(os.Args) < 3 {
-			fmt.Fprintln(os.Stdout, "Usage: symroom checkpoint <request|resolve> [flags] [args]")
+			_, _ = fmt.Fprintln(os.Stdout, "Usage: symroom checkpoint <request|resolve> [flags] [args]")
 			os.Exit(int(exitcodes.ExitOK))
 		}
 		sub := os.Args[2]
@@ -1055,7 +1055,7 @@ func main() {
 		}
 		os.Exit(int(exitcodes.ExitOK))
 	case "-h", "--help", "help":
-		fmt.Fprint(os.Stdout, usageText)
+		_, _ = fmt.Fprint(os.Stdout, usageText)
 		os.Exit(int(exitcodes.ExitOK))
 	default:
 		fmt.Fprintf(os.Stderr, "Unknown subcommand: %s\n\n%s", subcommand, usageText)

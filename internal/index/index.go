@@ -33,7 +33,7 @@ func (idx *Indexer) Rebuild(j *journal.Journal) error {
 	if err != nil {
 		return fmt.Errorf("open sqlite db: %w", err)
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	schema := `
 CREATE TABLE IF NOT EXISTS events (
@@ -82,25 +82,25 @@ CREATE TABLE IF NOT EXISTS decisions (
 	if err != nil {
 		return err
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }()
 
 	stmtEv, err := tx.Prepare("INSERT OR REPLACE INTO events (id, room, author, seq, lamport, ts, kind, body) VALUES (?, ?, ?, ?, ?, ?, ?, ?)")
 	if err != nil {
 		return err
 	}
-	defer stmtEv.Close()
+	defer func() { _ = stmtEv.Close() }()
 
 	stmtNote, err := tx.Prepare("INSERT OR REPLACE INTO notes (event_id, author, ts, text) VALUES (?, ?, ?, ?)")
 	if err != nil {
 		return err
 	}
-	defer stmtNote.Close()
+	defer func() { _ = stmtNote.Close() }()
 
 	stmtDec, err := tx.Prepare("INSERT OR REPLACE INTO decisions (event_id, author, ts, text, refs) VALUES (?, ?, ?, ?, ?)")
 	if err != nil {
 		return err
 	}
-	defer stmtDec.Close()
+	defer func() { _ = stmtDec.Close() }()
 
 	for _, ev := range merged {
 		_ = state.ApplyEvent(ev)
@@ -134,7 +134,7 @@ CREATE TABLE IF NOT EXISTS decisions (
 	if err != nil {
 		return err
 	}
-	defer stmtMem.Close()
+	defer func() { _ = stmtMem.Close() }()
 
 	for _, m := range state.Members {
 		if _, err := stmtMem.Exec(m.ID, m.Name, string(m.PublicKey), string(m.Role), string(m.Kind)); err != nil {

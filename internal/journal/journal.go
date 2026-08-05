@@ -85,7 +85,7 @@ func (j *Journal) Append(ev *event.Event) error {
 	if err != nil {
 		return fmt.Errorf("open segment file: %w", err)
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	if _, err := f.Write(line); err != nil {
 		return fmt.Errorf("write segment line: %w", err)
@@ -101,7 +101,7 @@ func readLastSegmentStats(path string) (uint64, string, error) {
 		}
 		return 0, "", err
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	var lastLine []byte
 	var count uint64
@@ -137,7 +137,7 @@ func (j *Journal) readSegmentUnlocked(author string) ([]*event.Event, error) {
 		}
 		return nil, err
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	var events []*event.Event
 	scanner := bufio.NewScanner(f)
@@ -172,7 +172,7 @@ func (j *Journal) VerifyChain(author string) error {
 		}
 		return err
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	lines, err := readLines(f)
 	if err != nil {

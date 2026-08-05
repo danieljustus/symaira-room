@@ -28,7 +28,9 @@ func Generate(roomDir, memberID string) (string, *Profile, error) {
 
 	state := members.NewState()
 	for _, e := range merged {
-		state.ApplyEvent(e)
+		if err := state.ApplyEvent(e); err != nil {
+			return "", nil, err
+		}
 	}
 
 	m, exists := state.Members[memberID]

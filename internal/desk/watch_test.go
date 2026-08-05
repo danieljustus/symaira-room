@@ -23,10 +23,14 @@ func TestWatchStreamOnlyLinkedArtifactsProduceEvents(t *testing.T) {
 	}
 
 	linkedPath := filepath.Join(tempDir, "linked.txt")
-	os.WriteFile(linkedPath, []byte("original content"), 0644)
+	if err := os.WriteFile(linkedPath, []byte("original content"), 0644); err != nil {
+		t.Fatalf("write file: %v", err)
+	}
 
 	unlinkedPath := filepath.Join(tempDir, "unlinked.txt")
-	os.WriteFile(unlinkedPath, []byte("noise content"), 0644)
+	if err := os.WriteFile(unlinkedPath, []byte("noise content"), 0644); err != nil {
+		t.Fatalf("write file: %v", err)
+	}
 
 	// Link only linkedPath
 	_, err = artifact.Link(tempDir, tempDir, linkedPath, "Linked Doc", ownerID)
@@ -35,7 +39,9 @@ func TestWatchStreamOnlyLinkedArtifactsProduceEvents(t *testing.T) {
 	}
 
 	// Modify linked file
-	os.WriteFile(linkedPath, []byte("updated content"), 0644)
+	if err := os.WriteFile(linkedPath, []byte("updated content"), 0644); err != nil {
+		t.Fatalf("write file: %v", err)
+	}
 
 	// Simulate NDJSON stream containing both linked and unlinked file events
 	ndjsonInput := `{"event":"file_changed","path":"` + unlinkedPath + `"}

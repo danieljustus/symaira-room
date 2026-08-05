@@ -51,13 +51,13 @@ func ExecuteAdapter(ctx context.Context, roomDir, runID string, id *identity.Ide
 	if err != nil {
 		return err
 	}
-	defer stdoutFile.Close()
+	defer func() { _ = stdoutFile.Close() }()
 
 	stderrFile, err := os.Create(stderrPath)
 	if err != nil {
 		return err
 	}
-	defer stderrFile.Close()
+	defer func() { _ = stderrFile.Close() }()
 
 	promptVal := r.Title
 	if r.PlanFile != "" {

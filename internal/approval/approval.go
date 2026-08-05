@@ -27,7 +27,9 @@ func Approve(roomDir, runID, scopeStr string, ttl time.Duration, id *identity.Id
 	}
 	state := members.NewState()
 	for _, e := range merged {
-		state.ApplyEvent(e)
+		if err := state.ApplyEvent(e); err != nil {
+			return nil, err
+		}
 	}
 	m, exists := state.Members[id.MemberID]
 	if exists && m.Role == members.RoleAgent {
