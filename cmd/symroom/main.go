@@ -10,8 +10,10 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"sort"
 	"strings"
 	"syscall"
+	"text/tabwriter"
 	"time"
 
 	"github.com/danieljustus/symaira-corekit/exitcodes"
@@ -203,43 +205,99 @@ func main() {
 		}
 		sub := os.Args[2]
 		switch sub {
+		case "--help", "-h":
+			_, _ = fmt.Fprintln(os.Stdout, "Usage: symroom member <add|list|remove|role> [flags] [args]")
+			os.Exit(int(exitcodes.ExitOK))
 		case "add":
 			fs := flag.NewFlagSet("member add", flag.ExitOnError)
 			pubFlag := fs.String("pubkey", "", "Member public key (hex)")
 			nameFlag := fs.String("name", "", "Member display name")
 			roleFlag := fs.String("role", "member", "Member role (owner|member|agent|observer)")
 			kindFlag := fs.String("kind", "human", "Member kind (human|agent)")
+			idFlag := fs.String("identity", "", "Caller identity name (must be the room owner)")
 			if err := fs.Parse(os.Args[3:]); err != nil {
 				os.Exit(int(exitcodes.ExitNoInput))
 			}
-			if *pubFlag == "" || *nameFlag == "" {
-				fmt.Fprintln(os.Stderr, "Usage: symroom member add --pubkey <hex> --name <name> [--role <role>] [--kind <kind>]")
+			memberName, pubKeyHex := *nameFlag, *pubFlag
+			if fs.NArg() >= 2 {
+				memberName, pubKeyHex = fs.Arg(0), fs.Arg(1)
+			}
+			if pubKeyHex == "" || memberName == "" {
+				_, _ = fmt.Fprintln(os.Stderr, "Usage: symroom member add [--identity <name>] <name> <pubkey> [--role <role>] [--kind <kind>]")
+				_, _ = fmt.Fprintln(os.Stderr, "       symroom member add --pubkey <hex> --name <name> [--role <role>] [--kind <kind>] [--identity <name>]")
 				os.Exit(int(exitcodes.ExitNoInput))
 			}
-			pubBytes, err := hex.DecodeString(*pubFlag)
+			id := loadCallerIdentity(*idFlag)
+			ev, err := room.AddMember(".", memberName, pubKeyHex, members.Role(*roleFlag), members.MemberKind(*kindFlag), id)
+			if err != nil {
+				exitMemberError(err)
+			}
+			pubBytes, err := hex.DecodeString(pubKeyHex)
 			if err != nil {
 				fmt.Fprintf(os.Stderr, "Invalid public key hex: %v\n", err)
 				os.Exit(int(exitcodes.ExitNoInput))
 			}
 			memID := identity.ComputeMemberID(pubBytes)
-			fmt.Printf("Member added: %s (%s, role: %s, kind: %s)\n", *nameFlag, memID, *roleFlag, *kindFlag)
+			fmt.Printf("Member added: %s (%s, role: %s, kind: %s, event: %s)\n", memberName, memID, *roleFlag, *kindFlag, ev.ID)
 			os.Exit(int(exitcodes.ExitOK))
 		case "list":
-			fmt.Println("Members: (run symroom log or index to view members state)")
+			state, err := room.ListMembers(".")
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "Error listing members: %v\n", err)
+				os.Exit(int(exitcodes.ExitGeneric))
+			}
+			if len(state.Members) == 0 {
+				fmt.Println("No members")
+				os.Exit(int(exitcodes.ExitOK))
+			}
+			ids := make([]string, 0, len(state.Members))
+			for mid := range state.Members {
+				ids = append(ids, mid)
+			}
+			sort.Strings(ids)
+			w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
+			_, _ = fmt.Fprintln(w, "ID	NAME	ROLE	KIND")
+			for _, mid := range ids {
+				m := state.Members[mid]
+				_, _ = fmt.Fprintf(w, "%s	%s	%s	%s\n", m.ID, m.Name, m.Role, m.Kind)
+			}
+			_ = w.Flush()
 			os.Exit(int(exitcodes.ExitOK))
 		case "remove":
-			if len(os.Args) < 4 {
-				fmt.Fprintln(os.Stderr, "Usage: symroom member remove <member_id>")
+			fs := flag.NewFlagSet("member remove", flag.ExitOnError)
+			idFlag := fs.String("identity", "", "Caller identity name (must be the room owner)")
+			if err := fs.Parse(os.Args[3:]); err != nil {
 				os.Exit(int(exitcodes.ExitNoInput))
 			}
-			fmt.Printf("Member removed: %s\n", os.Args[3])
+			if fs.NArg() < 1 {
+				_, _ = fmt.Fprintln(os.Stderr, "Usage: symroom member remove [--identity <name>] <member_id>")
+				os.Exit(int(exitcodes.ExitNoInput))
+			}
+			id := loadCallerIdentity(*idFlag)
+			memberID := fs.Arg(0)
+			ev, err := room.RemoveMember(".", memberID, id)
+			if err != nil {
+				exitMemberError(err)
+			}
+			fmt.Printf("Member removed: %s (event: %s)\n", memberID, ev.ID)
 			os.Exit(int(exitcodes.ExitOK))
 		case "role":
-			if len(os.Args) < 5 {
-				fmt.Fprintln(os.Stderr, "Usage: symroom member role <member_id> <role>")
+			fs := flag.NewFlagSet("member role", flag.ExitOnError)
+			idFlag := fs.String("identity", "", "Caller identity name (must be the room owner)")
+			if err := fs.Parse(os.Args[3:]); err != nil {
 				os.Exit(int(exitcodes.ExitNoInput))
 			}
-			fmt.Printf("Updated role for %s to %s\n", os.Args[3], os.Args[4])
+			if fs.NArg() < 2 {
+				_, _ = fmt.Fprintln(os.Stderr, "Usage: symroom member role [--identity <name>] <member_id> <role>")
+				os.Exit(int(exitcodes.ExitNoInput))
+			}
+			id := loadCallerIdentity(*idFlag)
+			memberID, roleStr := fs.Arg(0), fs.Arg(1)
+			ev, err := room.SetMemberRole(".", memberID, members.Role(roleStr), id)
+			if err != nil {
+				exitMemberError(err)
+			}
+			fmt.Printf("Updated role for %s to %s (event: %s)\n", memberID, roleStr, ev.ID)
 			os.Exit(int(exitcodes.ExitOK))
 		default:
 			fmt.Fprintf(os.Stderr, "Unknown member action: %s\n", sub)
@@ -1060,5 +1118,46 @@ func main() {
 	default:
 		fmt.Fprintf(os.Stderr, "Unknown subcommand: %s\n\n%s", subcommand, usageText)
 		os.Exit(int(exitcodes.ExitNoInput))
+	}
+}
+
+// loadCallerIdentity resolves the identity used to sign journal events,
+// falling back to the configured default identity.
+func loadCallerIdentity(idName string) *identity.Identity {
+	if idName == "" {
+		cfg := config.LoadOrExit()
+		idName = cfg.DefaultIdentity
+	}
+	if idName == "" {
+		_, _ = fmt.Fprintln(os.Stderr, "Error: --identity is required when default_identity is not configured")
+		os.Exit(int(exitcodes.ExitNoInput))
+	}
+	id, err := identity.Load(idName)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error loading identity %s: %v\n", idName, err)
+		os.Exit(int(exitcodes.ExitNotFound))
+	}
+	return id
+}
+
+// exitMemberError maps member-management errors to a clear message and exit
+// code, then terminates the process.
+func exitMemberError(err error) {
+	switch {
+	case errors.Is(err, members.ErrUnauthorizedOwnerAction):
+		_, _ = fmt.Fprintln(os.Stderr, "Error: only room owners can perform member management")
+		os.Exit(int(exitcodes.ExitForbidden))
+	case errors.Is(err, members.ErrMemberNotFound):
+		_, _ = fmt.Fprintln(os.Stderr, "Error: member not found")
+		os.Exit(int(exitcodes.ExitNotFound))
+	case errors.Is(err, members.ErrInvalidRole):
+		_, _ = fmt.Fprintln(os.Stderr, "Error: invalid member role (valid: owner|member|agent|observer)")
+		os.Exit(int(exitcodes.ExitNoInput))
+	case errors.Is(err, members.ErrInvalidKind):
+		_, _ = fmt.Fprintln(os.Stderr, "Error: invalid member kind (valid: human|agent)")
+		os.Exit(int(exitcodes.ExitNoInput))
+	default:
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		os.Exit(int(exitcodes.ExitGeneric))
 	}
 }

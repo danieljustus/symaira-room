@@ -85,13 +85,27 @@ Then, as owner, add them:
 
 ```sh
 symroom member add \
+    --identity alice \
     --pubkey <bob-hex-key> \
     --name bob \
     --role agent \
     --kind agent
+# Member added: bob (mem_<bob-id>, role: agent, kind: agent, event: ev_<event-id>)
 ```
 
-Members can have roles: `owner`, `member`, `agent`, or `observer` — and kinds: `human` or `agent`.
+The `--identity` flag selects the signing identity and must be the room owner; it falls back to `default_identity` from the config when omitted. The positional form `symroom member add <name> <pubkey>` is equivalent. Members can have roles: `owner`, `member`, `agent`, or `observer` — and kinds: `human` or `agent`.
+
+List members, change a role, or remove a member (all owner-only):
+
+```sh
+symroom member list
+# ID                       NAME    ROLE    KIND
+# mem_<alice-hash>         alice   owner   human
+# mem_<bob-hash>           bob     agent   agent
+
+symroom member role --identity alice mem_<bob-hash> member
+symroom member remove --identity alice mem_<bob-hash>
+```
 
 | Role       | Can approve runs? | Can post notes? | Can manage members? |
 |------------|:---:|:---:|:---:|
