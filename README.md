@@ -289,6 +289,28 @@ my-project/
 
 ---
 
+## Exit codes
+
+`symroom` uses stable exit codes for scripting (defined in the shared `symaira-corekit/exitcodes` package):
+
+| Code | Meaning |
+|------|---------|
+| 0 | Success |
+| 1 | Generic error |
+| 2 | Missing or invalid input |
+| 3 | Authentication failure |
+| 4 | Operation not permitted (e.g. a run was denied) |
+| 5 | Resource not found |
+| 6 | Conflict with current state |
+| 7 | Internal software error |
+| 8 | Data format error |
+| 9 | Configuration error |
+| 10 | Interrupted (e.g. `run wait` / `checkpoint wait` timed out) |
+
+Scripts should check these codes rather than matching stderr text. Codes are stable for the v0.x line; see the `exitcodes` package for the canonical list.
+
+---
+
 ## Development
 
 ```sh
