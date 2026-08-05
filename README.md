@@ -1,32 +1,50 @@
 # symroom
 
 [![CI](https://github.com/danieljustus/symaira-room/actions/workflows/ci.yml/badge.svg)](https://github.com/danieljustus/symaira-room/actions/workflows/ci.yml)
+[![Go version](https://img.shields.io/github/go-mod/go-version/danieljustus/symaira-room)](https://go.dev/dl/)
+[![License](https://img.shields.io/github/license/danieljustus/symaira-room)](LICENSE)
+
+![symroom demo](docs/demo.svg)
 
 `symroom` is the shared, verifiable work record of a project: who belongs to it, what happened, and what was approved. It is a signed, append-only journal of events (notes, decisions, membership changes, run lifecycle) — not a chat system, not a policy engine, and not a Git host.
 
 **Repository:** [github.com/danieljustus/symaira-room](https://github.com/danieljustus/symaira-room)
 
+> **Stability:** `symroom` is pre-1.0 (`v0.x`). The CLI surface and journal format may change until `v1.0`; see the [roadmap](#roadmap).
+
 ---
 
 ## Installation
 
-Requires Go 1.26+.
+Requires Go 1.26+ (or Homebrew on macOS).
+
+```sh
+go install github.com/danieljustus/symaira-room/cmd/symroom@latest
+```
+
+Or via Homebrew (macOS):
+
+```sh
+brew install danieljustus/tap/symroom
+```
+
+Or build from source:
 
 ```sh
 git clone https://github.com/danieljustus/symaira-room
 cd symaira-room
 make build          # produces bin/symroom
-```
-
-Or build and install directly:
-
-```sh
-go build -o /usr/local/bin/symroom ./cmd/symroom
+go build -o /usr/local/bin/symroom ./cmd/symroom   # or install directly
 ```
 
 Run `make test` to execute the full test suite.
 
 ---
+
+## Roadmap
+
+- **v0.x (current):** core room + journal + members + runs + approvals; MCP server; `symbrain` profile emission. API and journal format may change.
+- **v1.0:** frozen journal format and CLI exit-code contract; long-term stability guarantees.
 
 ## Quickstart
 
