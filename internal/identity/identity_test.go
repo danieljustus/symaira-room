@@ -11,12 +11,17 @@ import (
 	"testing"
 )
 
-func TestGenerateAndSaveLoad(t *testing.T) {
+func isolatedLoadEnv(t *testing.T) string {
+	t.Helper()
 	tempDir := t.TempDir()
 	t.Setenv("XDG_DATA_HOME", tempDir)
-	// Keep the fallback chains inert: no env key, no symvault/security on PATH.
-	t.Setenv("SYMROOM_IDENTITY_KEY", "")
 	t.Setenv("PATH", tempDir)
+	t.Setenv("SYMROOM_IDENTITY_KEY", "")
+	return tempDir
+}
+
+func TestGenerateAndSaveLoad(t *testing.T) {
+	isolatedLoadEnv(t)
 
 	id, err := Generate("alice")
 	if err != nil {
@@ -93,10 +98,7 @@ func TestNoPrivateKeyLogging(t *testing.T) {
 }
 
 func TestSymvaultFallbackToFile(t *testing.T) {
-	tempDir := t.TempDir()
-	t.Setenv("XDG_DATA_HOME", tempDir)
-	t.Setenv("PATH", tempDir) // Empty path so symvault is absent
-	t.Setenv("SYMROOM_IDENTITY_KEY", "")
+	isolatedLoadEnv(t)
 
 	id, err := Generate("dave")
 	if err != nil {
@@ -148,10 +150,7 @@ func writeIdentityFile(t *testing.T, dataHome, name, content string) {
 // TestLoadEnvVarChain covers chain 1: SYMROOM_IDENTITY_KEY (full private key
 // hex form). The env key must win even when a file identity exists.
 func TestLoadEnvVarChain(t *testing.T) {
-	tempDir := t.TempDir()
-	t.Setenv("XDG_DATA_HOME", tempDir)
-	t.Setenv("PATH", tempDir) // no symvault/security
-	t.Setenv("SYMROOM_IDENTITY_KEY", "")
+	isolatedLoadEnv(t)
 
 	envID, err := Generate("env-user")
 	if err != nil {
@@ -185,10 +184,7 @@ func TestLoadEnvVarChain(t *testing.T) {
 // TestLoadEnvVarSeedForm covers chain 1 with the 32-byte seed form: the seed is
 // expanded via ed25519.NewKeyFromSeed and must reproduce the same key.
 func TestLoadEnvVarSeedForm(t *testing.T) {
-	tempDir := t.TempDir()
-	t.Setenv("XDG_DATA_HOME", tempDir)
-	t.Setenv("PATH", tempDir)
-	t.Setenv("SYMROOM_IDENTITY_KEY", "")
+	isolatedLoadEnv(t)
 
 	id, err := Generate("seed-user")
 	if err != nil {
@@ -211,9 +207,7 @@ func TestLoadEnvVarSeedForm(t *testing.T) {
 // TestLoadInvalidEnvKeyFallsThroughToFile covers the env chain rejection path:
 // a non-hex or wrong-length env key must be skipped in favor of the file chain.
 func TestLoadInvalidEnvKeyFallsThroughToFile(t *testing.T) {
-	tempDir := t.TempDir()
-	t.Setenv("XDG_DATA_HOME", tempDir)
-	t.Setenv("PATH", tempDir)
+	isolatedLoadEnv(t)
 	t.Setenv("SYMROOM_IDENTITY_KEY", "test-key-this-is-not-valid-hex")
 
 	id, err := Generate("fallback-user")
@@ -236,10 +230,7 @@ func TestLoadInvalidEnvKeyFallsThroughToFile(t *testing.T) {
 // TestLoadSymvaultChain covers chain 2: a fake symvault on PATH that answers
 // `symvault get symroom/identities/<name>` with a valid private key hex.
 func TestLoadSymvaultChain(t *testing.T) {
-	tempDir := t.TempDir()
-	t.Setenv("XDG_DATA_HOME", tempDir)
-	t.Setenv("PATH", tempDir)
-	t.Setenv("SYMROOM_IDENTITY_KEY", "")
+	tempDir := isolatedLoadEnv(t)
 
 	id, err := Generate("vault-user")
 	if err != nil {
@@ -262,10 +253,7 @@ func TestLoadSymvaultChain(t *testing.T) {
 // TestLoadSymvaultGarbageFallsThroughToFile covers the symvault rejection path:
 // a symvault that returns non-hex output must be skipped in favor of the file chain.
 func TestLoadSymvaultGarbageFallsThroughToFile(t *testing.T) {
-	tempDir := t.TempDir()
-	t.Setenv("XDG_DATA_HOME", tempDir)
-	t.Setenv("PATH", tempDir)
-	t.Setenv("SYMROOM_IDENTITY_KEY", "")
+	tempDir := isolatedLoadEnv(t)
 	writeFakeBin(t, tempDir, "symvault", "#!/bin/sh\necho test-key-garbage-not-hex\n")
 
 	id, err := Generate("vault-fallback")
@@ -291,10 +279,7 @@ func TestLoadKeychainChain(t *testing.T) {
 	if runtime.GOOS != "darwin" {
 		t.Skip("macOS keychain chain only runs on darwin")
 	}
-	tempDir := t.TempDir()
-	t.Setenv("XDG_DATA_HOME", tempDir)
-	t.Setenv("PATH", tempDir)
-	t.Setenv("SYMROOM_IDENTITY_KEY", "")
+	tempDir := isolatedLoadEnv(t)
 
 	id, err := Generate("keychain-user")
 	if err != nil {
@@ -321,10 +306,7 @@ func TestLoadKeychainFailureFallsThroughToFile(t *testing.T) {
 	if runtime.GOOS != "darwin" {
 		t.Skip("macOS keychain chain only runs on darwin")
 	}
-	tempDir := t.TempDir()
-	t.Setenv("XDG_DATA_HOME", tempDir)
-	t.Setenv("PATH", tempDir)
-	t.Setenv("SYMROOM_IDENTITY_KEY", "")
+	tempDir := isolatedLoadEnv(t)
 	writeFakeBin(t, tempDir, "security", "#!/bin/sh\necho test-key-not-found >&2\nexit 44\n")
 
 	id, err := Generate("keychain-fallback")
@@ -347,10 +329,7 @@ func TestLoadKeychainFailureFallsThroughToFile(t *testing.T) {
 // TestLoadIdentityNotFound covers the terminal fallback: no env key, no
 // symvault, no keychain entry, and no identity file -> ErrIdentityNotFound.
 func TestLoadIdentityNotFound(t *testing.T) {
-	tempDir := t.TempDir()
-	t.Setenv("XDG_DATA_HOME", tempDir)
-	t.Setenv("PATH", tempDir)
-	t.Setenv("SYMROOM_IDENTITY_KEY", "")
+	isolatedLoadEnv(t)
 
 	_, err := Load("nobody")
 	if !errors.Is(err, ErrIdentityNotFound) {
@@ -362,10 +341,7 @@ func TestLoadIdentityNotFound(t *testing.T) {
 // paths: invalid hex, wrong private key length, and wrong public key length
 // must all surface as ErrInvalidKey.
 func TestLoadCorruptedFileReturnsErrInvalidKey(t *testing.T) {
-	tempDir := t.TempDir()
-	t.Setenv("XDG_DATA_HOME", tempDir)
-	t.Setenv("PATH", tempDir)
-	t.Setenv("SYMROOM_IDENTITY_KEY", "")
+	tempDir := isolatedLoadEnv(t)
 
 	goodPriv := hex.EncodeToString(func() []byte {
 		id, err := Generate("tmp")
@@ -422,10 +398,7 @@ func TestLoadCorruptedFileReturnsErrInvalidKey(t *testing.T) {
 // TestLoadUnparsableFile covers a file that is not valid JSON: Load must fail
 // with a wrapped unmarshal error (not ErrIdentityNotFound / ErrInvalidKey).
 func TestLoadUnparsableFile(t *testing.T) {
-	tempDir := t.TempDir()
-	t.Setenv("XDG_DATA_HOME", tempDir)
-	t.Setenv("PATH", tempDir)
-	t.Setenv("SYMROOM_IDENTITY_KEY", "")
+	tempDir := isolatedLoadEnv(t)
 	writeIdentityFile(t, tempDir, "garbage", "{ this is not json")
 
 	_, err := Load("garbage")
@@ -437,5 +410,45 @@ func TestLoadUnparsableFile(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "unmarshal identity file") {
 		t.Errorf("expected unmarshal context in error, got %v", err)
+	}
+}
+
+func TestListIdentities(t *testing.T) {
+	isolatedLoadEnv(t)
+
+	if got, err := List(); err != nil {
+		t.Fatalf("List on missing directory: %v", err)
+	} else if len(got) != 0 {
+		t.Fatalf("List on missing directory = %v, want empty", got)
+	}
+
+	for _, name := range []string{"alice", "bob"} {
+		id, err := Generate(name)
+		if err != nil {
+			t.Fatalf("Generate(%q): %v", name, err)
+		}
+		if err := Save(id); err != nil {
+			t.Fatalf("Save(%q): %v", name, err)
+		}
+	}
+	if err := os.WriteFile(filepath.Join(IdentitiesDir(), "notes.txt"), nil, 0o600); err != nil {
+		t.Fatalf("write non-identity file: %v", err)
+	}
+	if err := os.Mkdir(filepath.Join(IdentitiesDir(), "nested.json"), 0o700); err != nil {
+		t.Fatalf("write identity directory: %v", err)
+	}
+
+	got, err := List()
+	if err != nil {
+		t.Fatalf("List: %v", err)
+	}
+	want := map[string]bool{"alice": true, "bob": true}
+	if len(got) != len(want) {
+		t.Fatalf("List = %v, want %v", got, want)
+	}
+	for _, name := range got {
+		if !want[name] {
+			t.Errorf("List returned unexpected identity %q", name)
+		}
 	}
 }

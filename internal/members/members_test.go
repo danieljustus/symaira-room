@@ -138,3 +138,67 @@ func TestVerifyMemberPublicKey(t *testing.T) {
 		t.Errorf("expected valid ed25519 public key")
 	}
 }
+
+func TestApplyEventTransitionsAndValidation(t *testing.T) {
+	ownerID, err := identity.Generate("owner")
+	if err != nil {
+		t.Fatalf("generate owner: %v", err)
+	}
+	targetID, err := identity.Generate("target")
+	if err != nil {
+		t.Fatalf("generate target: %v", err)
+	}
+	state := NewState()
+	apply := func(kind string, author string, body any) error {
+		t.Helper()
+		data, err := json.Marshal(body)
+		if err != nil {
+			t.Fatalf("marshal %s: %v", kind, err)
+		}
+		return state.ApplyEvent(&event.Event{Kind: kind, Author: author, Body: data})
+	}
+
+	if err := apply(event.KindRoomCreated, ownerID.MemberID, map[string]string{
+		"name": "Room", "public_key": hex.EncodeToString(ownerID.PublicKey),
+	}); err != nil {
+		t.Fatalf("room.created: %v", err)
+	}
+	if err := state.ApplyEvent(&event.Event{Kind: event.KindRoomCreated, Author: ownerID.MemberID, Body: json.RawMessage(`{`)}); err == nil {
+		t.Fatal("malformed room.created should fail")
+	}
+
+	if err := apply(event.KindMemberAdded, ownerID.MemberID, map[string]any{
+		"id": targetID.MemberID, "name": "target", "public_key": hex.EncodeToString(targetID.PublicKey),
+		"role": RoleObserver, "kind": KindHuman,
+	}); err != nil {
+		t.Fatalf("member.added: %v", err)
+	}
+	if err := apply(event.KindRunApproved, targetID.MemberID, map[string]string{}); err != ErrObserverForbidden {
+		t.Errorf("observer approval error = %v, want %v", err, ErrObserverForbidden)
+	}
+	if err := apply(event.KindRunApproved, "mem_missing", map[string]string{}); err != ErrMemberNotFound {
+		t.Errorf("unknown approval error = %v, want %v", err, ErrMemberNotFound)
+	}
+
+	if err := apply(event.KindMemberRoleChanged, ownerID.MemberID, map[string]any{
+		"id": targetID.MemberID, "role": RoleMember,
+	}); err != nil {
+		t.Fatalf("member.role_changed: %v", err)
+	}
+	if got := state.Members[targetID.MemberID].Role; got != RoleMember {
+		t.Errorf("target role = %s, want %s", got, RoleMember)
+	}
+	if err := apply(event.KindRunApproved, targetID.MemberID, map[string]string{}); err != nil {
+		t.Fatalf("member approval: %v", err)
+	}
+
+	if err := apply(event.KindMemberRemoved, ownerID.MemberID, map[string]string{"id": targetID.MemberID}); err != nil {
+		t.Fatalf("member.removed: %v", err)
+	}
+	if _, ok := state.Members[targetID.MemberID]; ok {
+		t.Fatal("removed member still present")
+	}
+	if err := apply(event.KindMemberAdded, ownerID.MemberID, map[string]any{"id": "bad", "public_key": "not-hex"}); err == nil {
+		t.Fatal("invalid member public key should fail")
+	}
+}

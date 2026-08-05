@@ -115,3 +115,37 @@ func TestPendingRunsList(t *testing.T) {
 		t.Fatalf("expected 1 pending run, got %d", len(listPending))
 	}
 }
+
+func TestCancelRun(t *testing.T) {
+	tempDir := t.TempDir()
+	ownerID, err := identity.Generate("owner")
+	if err != nil {
+		t.Fatalf("generate identity: %v", err)
+	}
+
+	ev, err := Request(tempDir, "Cancel me", "", "", ownerID)
+	if err != nil {
+		t.Fatalf("Request failed: %v", err)
+	}
+	var body struct {
+		RunID string `json:"run_id"`
+	}
+	if err := json.Unmarshal(ev.Body, &body); err != nil {
+		t.Fatalf("unmarshal request body: %v", err)
+	}
+
+	if _, err := Cancel(tempDir, body.RunID, "no longer needed", ownerID); err != nil {
+		t.Fatalf("Cancel failed: %v", err)
+	}
+	r, err := Get(tempDir, body.RunID)
+	if err != nil {
+		t.Fatalf("Get cancelled run: %v", err)
+	}
+	if r.State != StateCancelled || r.Error != "no longer needed" {
+		t.Errorf("cancelled run = state %q, error %q; want cancelled/no longer needed", r.State, r.Error)
+	}
+
+	if _, err := Cancel(tempDir, body.RunID, "again", ownerID); err == nil {
+		t.Fatal("expected terminal run cancellation to fail")
+	}
+}
