@@ -43,7 +43,7 @@ jobs:
             '  desc "Shared, verifiable work record for projects"' \
             "  homepage \"https://github.com/${GITHUB_REPOSITORY}\"" \
             "  version \"${version}\"" \
-            '  license "MIT"' \
+            '  license "Apache-2.0"' \
             '' \
             '  on_macos do' \
             '    if Hardware::CPU.arm?' \
