@@ -2,6 +2,7 @@ package journal
 
 import (
 	"bufio"
+	"bytes"
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
@@ -19,13 +20,37 @@ var (
 	ErrSeqMismatch = errors.New("journal sequence number mismatch")
 )
 
+const zeroHash = "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+
+// tailStat is the cached tail of one author's segment: the sequence number and
+// line hash of the last event written, plus the segment file size the cache
+// was populated at. The size lets Append detect external modifications with a
+// cheap stat and re-sync from disk instead of silently diverging.
+type tailStat struct {
+	seq  uint64
+	hash string
+	size int64
+}
+
 type Journal struct {
 	Dir string
 	mu  sync.RWMutex
+
+	// tails caches per-author segment tail stats. Entries are populated on
+	// first use (cold start, reading from disk) and kept in lockstep with
+	// Append. Guarded by mu.
+	tails map[string]tailStat
+
+	// lamportMax/lamportKnown cache the global maximum Lamport across all
+	// segments. lamportKnown is only set once the whole journal has been
+	// scanned at least once, so the cached value can never under-report the
+	// true maximum. Guarded by mu.
+	lamportMax   uint64
+	lamportKnown bool
 }
 
 func New(dir string) *Journal {
-	return &Journal{Dir: dir}
+	return &Journal{Dir: dir, tails: make(map[string]tailStat)}
 }
 
 func (j *Journal) SegmentPath(author string) string {
@@ -38,19 +63,24 @@ func ComputeLineHash(line []byte) string {
 }
 
 func (j *Journal) PrepareEvent(ev *event.Event) error {
-	maxL, _ := j.MaxLamport()
-	if ev.Lamport <= maxL {
-		ev.Lamport = maxL + 1
-	}
+	j.mu.Lock()
+	defer j.mu.Unlock()
 
-	segPath := j.SegmentPath(ev.Author)
-	lastSeq, lastHash, err := readLastSegmentStats(segPath)
+	// Resolve the segment tail first: if the file changed on disk since the
+	// cache was populated, the re-sync also invalidates the Lamport cache so
+	// the Lamport assignment below cannot under-report.
+	st, err := j.tailStatForLocked(ev.Author)
 	if err != nil {
 		return err
 	}
 
-	ev.Seq = lastSeq + 1
-	ev.Prev = lastHash
+	maxL, _ := j.maxLamportUnlocked()
+	if ev.Lamport <= maxL {
+		ev.Lamport = maxL + 1
+	}
+
+	ev.Seq = st.seq + 1
+	ev.Prev = st.hash
 	return nil
 }
 
@@ -64,12 +94,12 @@ func (j *Journal) Append(ev *event.Event) error {
 
 	segPath := j.SegmentPath(ev.Author)
 	if ev.Seq == 0 {
-		lastSeq, lastHash, err := readLastSegmentStats(segPath)
+		st, err := j.tailStatForLocked(ev.Author)
 		if err != nil {
 			return err
 		}
-		ev.Seq = lastSeq + 1
-		ev.Prev = lastHash
+		ev.Seq = st.seq + 1
+		ev.Prev = st.hash
 	}
 	if ev.Lamport == 0 {
 		maxL, _ := j.maxLamportUnlocked()
@@ -90,14 +120,84 @@ func (j *Journal) Append(ev *event.Event) error {
 	if _, err := f.Write(line); err != nil {
 		return fmt.Errorf("write segment line: %w", err)
 	}
+
+	// Keep the tail cache in lockstep with what was just written. This runs
+	// under j.mu, so the cached seq/prev chain can never diverge from the
+	// on-disk segment for appends made through this instance.
+	if j.tails == nil {
+		j.tails = make(map[string]tailStat)
+	}
+	st := j.tails[ev.Author]
+	st.seq = ev.Seq
+	// The marshaled line carries a trailing newline; the hash chain covers
+	// the JSON content without it, matching readLastSegmentStats and
+	// VerifyChain, which read lines via bufio.Scanner.
+	st.hash = ComputeLineHash(bytes.TrimSuffix(line, []byte("\n")))
+	st.size += int64(len(line))
+	j.tails[ev.Author] = st
+
+	if j.lamportKnown && ev.Lamport > j.lamportMax {
+		j.lamportMax = ev.Lamport
+	}
+
 	return nil
 }
 
+// tailStatForLocked returns the tail stats for author's segment, loading them
+// from disk on first use (cold start) and re-syncing when the segment file
+// changed on disk since the cache was populated. Caller must hold j.mu.
+func (j *Journal) tailStatForLocked(author string) (tailStat, error) {
+	if st, ok := j.tails[author]; ok {
+		fi, err := os.Stat(j.SegmentPath(author))
+		if err == nil {
+			if fi.Size() == st.size {
+				return st, nil
+			}
+			// Segment grew or shrank outside this instance: re-sync below.
+		} else if os.IsNotExist(err) {
+			if st.size == 0 {
+				return st, nil
+			}
+			// Segment was deleted externally; the tail is empty again.
+			st = tailStat{}
+			j.tails[author] = st
+			return st, nil
+		} else {
+			return tailStat{}, err
+		}
+	}
+	return j.loadTailLocked(author)
+}
+
+// loadTailLocked cold-starts the tail cache entry for author from disk.
+// Caller must hold j.mu.
+func (j *Journal) loadTailLocked(author string) (tailStat, error) {
+	segPath := j.SegmentPath(author)
+	seq, hash, err := readLastSegmentStats(segPath)
+	if err != nil {
+		return tailStat{}, err
+	}
+	var size int64
+	if fi, err := os.Stat(segPath); err == nil {
+		size = fi.Size()
+	}
+	st := tailStat{seq: seq, hash: hash, size: size}
+	if j.tails == nil {
+		j.tails = make(map[string]tailStat)
+	}
+	j.tails[author] = st
+	// A segment was read from disk; the cached global max Lamport may be
+	// stale if the file was written outside this instance, so drop it. The
+	// next MaxLamport call rescans once and repopulates it.
+	j.lamportKnown = false
+	return st, nil
+}
+
 func readLastSegmentStats(path string) (uint64, string, error) {
-	f, err := os.Open(path)
+	f, err := osOpen(path)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return 0, "sha256:0000000000000000000000000000000000000000000000000000000000000000", nil
+			return 0, zeroHash, nil
 		}
 		return 0, "", err
 	}
@@ -115,7 +215,7 @@ func readLastSegmentStats(path string) (uint64, string, error) {
 	}
 
 	if count == 0 {
-		return 0, "sha256:0000000000000000000000000000000000000000000000000000000000000000", nil
+		return 0, zeroHash, nil
 	}
 
 	return count, ComputeLineHash(lastLine), nil
@@ -130,7 +230,7 @@ func (j *Journal) ReadSegment(author string) ([]*event.Event, error) {
 
 func (j *Journal) readSegmentUnlocked(author string) ([]*event.Event, error) {
 	segPath := j.SegmentPath(author)
-	f, err := os.Open(segPath)
+	f, err := osOpen(segPath)
 	if err != nil {
 		if os.IsNotExist(err) {
 			return []*event.Event{}, nil
@@ -165,7 +265,7 @@ func (j *Journal) VerifyChain(author string) error {
 		return err
 	}
 	segPath := j.SegmentPath(author)
-	f, err := os.Open(segPath)
+	f, err := osOpen(segPath)
 	if err != nil {
 		if os.IsNotExist(err) && len(events) == 0 {
 			return nil
@@ -179,7 +279,7 @@ func (j *Journal) VerifyChain(author string) error {
 		return err
 	}
 
-	var prevHash = "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+	var prevHash = zeroHash
 	var expectedSeq uint64 = 1
 
 	for idx, lineBytes := range lines {
