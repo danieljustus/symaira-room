@@ -1,32 +1,50 @@
 # symroom
 
 [![CI](https://github.com/danieljustus/symaira-room/actions/workflows/ci.yml/badge.svg)](https://github.com/danieljustus/symaira-room/actions/workflows/ci.yml)
+[![Go version](https://img.shields.io/github/go-mod/go-version/danieljustus/symaira-room)](https://go.dev/dl/)
+[![License](https://img.shields.io/github/license/danieljustus/symaira-room)](LICENSE)
+
+![symroom demo](docs/demo.svg)
 
 `symroom` is the shared, verifiable work record of a project: who belongs to it, what happened, and what was approved. It is a signed, append-only journal of events (notes, decisions, membership changes, run lifecycle) — not a chat system, not a policy engine, and not a Git host.
 
 **Repository:** [github.com/danieljustus/symaira-room](https://github.com/danieljustus/symaira-room)
 
+> **Stability:** `symroom` is pre-1.0 (`v0.x`). The CLI surface and journal format may change until `v1.0`; see the [roadmap](#roadmap).
+
 ---
 
 ## Installation
 
-Requires Go 1.26+.
+Requires Go 1.26+ (or Homebrew on macOS).
+
+```sh
+go install github.com/danieljustus/symaira-room/cmd/symroom@latest
+```
+
+Or via Homebrew (macOS):
+
+```sh
+brew install danieljustus/tap/symroom
+```
+
+Or build from source:
 
 ```sh
 git clone https://github.com/danieljustus/symaira-room
 cd symaira-room
 make build          # produces bin/symroom
-```
-
-Or build and install directly:
-
-```sh
-go build -o /usr/local/bin/symroom ./cmd/symroom
+go build -o /usr/local/bin/symroom ./cmd/symroom   # or install directly
 ```
 
 Run `make test` to execute the full test suite.
 
 ---
+
+## Roadmap
+
+- **v0.x (current):** core room + journal + members + runs + approvals; MCP server; `symbrain` profile emission. API and journal format may change.
+- **v1.0:** frozen journal format and CLI exit-code contract; long-term stability guarantees.
 
 ## Quickstart
 
@@ -286,6 +304,28 @@ my-project/
 - **`journal/<member-id>.jsonl`**: One append-only, per-author JSONL file. Every line is a signed event. The per-author hash chain (each event references the sha256 of the previous line via `prev`) makes tampering detectable. See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for details.
 - **`.symroom/local.toml`**: TOML-format local machine config — default identity name, artifact root path. **Never sync this.**
 - **`.symroom/index.sqlite`**: A local, derived SQLite index rebuilt with `symroom index rebuild`. Contains a SQL view of the journal for fast queries. Rebuild any time after a sync merge.
+
+---
+
+## Exit codes
+
+`symroom` uses stable exit codes for scripting (defined in the shared `symaira-corekit/exitcodes` package):
+
+| Code | Meaning |
+|------|---------|
+| 0 | Success |
+| 1 | Generic error |
+| 2 | Missing or invalid input |
+| 3 | Authentication failure |
+| 4 | Operation not permitted (e.g. a run was denied) |
+| 5 | Resource not found |
+| 6 | Conflict with current state |
+| 7 | Internal software error |
+| 8 | Data format error |
+| 9 | Configuration error |
+| 10 | Interrupted (e.g. `run wait` / `checkpoint wait` timed out) |
+
+Scripts should check these codes rather than matching stderr text. Codes are stable for the v0.x line; see the `exitcodes` package for the canonical list.
 
 ---
 
