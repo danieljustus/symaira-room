@@ -218,10 +218,10 @@ func TestMainDispatchCoversSubcommands(t *testing.T) {
 	assertRun(roomDir, 0, []string{"Usage: symroom watch"}, "watch")
 }
 
-// TestLoadCallerIdentityInProcess covers the happy path of loadCallerIdentity
+// TestResolveIdentityInProcess covers the happy path of resolveIdentity
 // (the identity resolution helper) directly in-process. Its error branches
 // terminate via os.Exit and are covered by the re-exec scenarios above.
-func TestLoadCallerIdentityInProcess(t *testing.T) {
+func TestResolveIdentityInProcess(t *testing.T) {
 	t.Setenv("XDG_DATA_HOME", t.TempDir())
 	t.Setenv("SYMROOM_IDENTITY_KEY", "")
 	t.Setenv("PATH", t.TempDir()) // skip symvault/keychain fallback chains in identity.Load
@@ -233,9 +233,9 @@ func TestLoadCallerIdentityInProcess(t *testing.T) {
 	if err := identity.Save(alice); err != nil {
 		t.Fatalf("identity.Save: %v", err)
 	}
-	got := loadCallerIdentity("alice")
+	got := resolveIdentity("alice")
 	if got.MemberID != alice.MemberID || got.Name != "alice" {
-		t.Errorf("loadCallerIdentity(alice) = %s/%s, want %s/alice", got.Name, got.MemberID, alice.MemberID)
+		t.Errorf("resolveIdentity(alice) = %s/%s, want %s/alice", got.Name, got.MemberID, alice.MemberID)
 	}
 }
 
