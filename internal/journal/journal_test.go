@@ -134,6 +134,7 @@ func TestConcurrentAppendsDifferentSegments(t *testing.T) {
 			}
 			if err := ev.Sign(id); err != nil {
 				t.Errorf("worker sign error: %v", err)
+				continue
 			}
 			if err := j.Append(ev); err != nil {
 				t.Errorf("worker append error: %v", err)

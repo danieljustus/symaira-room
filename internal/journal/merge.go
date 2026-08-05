@@ -52,6 +52,9 @@ func (j *Journal) MaxLamport() (uint64, error) {
 }
 
 func (j *Journal) maxLamportUnlocked() (uint64, error) {
+	if j.lamportKnown {
+		return j.lamportMax, nil
+	}
 	segments, err := j.readAllSegmentsUnlocked()
 	if err != nil {
 		return 0, err
@@ -63,5 +66,7 @@ func (j *Journal) maxLamportUnlocked() (uint64, error) {
 			maxL = ev.Lamport
 		}
 	}
+	j.lamportMax = maxL
+	j.lamportKnown = true
 	return maxL, nil
 }

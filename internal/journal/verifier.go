@@ -51,7 +51,7 @@ func (j *Journal) Verify() (*Report, error) {
 			authorSeqs[author] = make(map[uint64]*event.Event)
 		}
 
-		var prevHash = "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+		var prevHash = zeroHash
 		var expectedSeq uint64 = 1
 
 		segPath := j.SegmentPath(author)
@@ -191,9 +191,9 @@ func (j *Journal) Verify() (*Report, error) {
 	return report, nil
 }
 
-func osOpen(path string) (fileReadCloser, error) {
-	return os.Open(path)
-}
+// osOpen is a seam for tests to observe segment file reads (e.g. to prove
+// appends no longer rescan segments). Production behavior is os.Open.
+var osOpen = os.Open
 
 type fileReadCloser interface {
 	Read(p []byte) (n int, err error)
