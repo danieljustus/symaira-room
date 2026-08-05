@@ -81,8 +81,12 @@ func TestObserverRoleRefused(t *testing.T) {
 		Kind:    event.KindMemberAdded,
 		Body:    bodyAdded,
 	}
-	evAdded.Sign(ownerID)
-	AppendEvent(roomDir, evAdded)
+	if err := evAdded.Sign(ownerID); err != nil {
+		t.Fatalf("sign member.added: %v", err)
+	}
+	if err := AppendEvent(roomDir, evAdded); err != nil {
+		t.Fatalf("append member.added: %v", err)
+	}
 
 	// Attempt note posting as observer -> must be refused
 	_, err = PostNote(roomDir, "Observer attempt", observerID)

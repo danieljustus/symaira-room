@@ -54,7 +54,9 @@ func TestCausality(t *testing.T) {
 
 	// User1 appends ev1 (Lamport 1)
 	ev1 := &event.Event{V: 1, ID: "ev_1", Author: id1.MemberID, Lamport: 1, Kind: event.KindNotePosted}
-	ev1.Sign(id1)
+	if err := ev1.Sign(id1); err != nil {
+		t.Fatalf("sign ev1: %v", err)
+	}
 	if err := j.Append(ev1); err != nil {
 		t.Fatalf("append ev1: %v", err)
 	}
@@ -65,7 +67,9 @@ func TestCausality(t *testing.T) {
 		t.Fatalf("MaxLamport: %v", err)
 	}
 	ev2 := &event.Event{V: 1, ID: "ev_2", Author: id2.MemberID, Lamport: maxL + 1, Kind: event.KindNotePosted}
-	ev2.Sign(id2)
+	if err := ev2.Sign(id2); err != nil {
+		t.Fatalf("sign ev2: %v", err)
+	}
 	if err := j.Append(ev2); err != nil {
 		t.Fatalf("append ev2: %v", err)
 	}

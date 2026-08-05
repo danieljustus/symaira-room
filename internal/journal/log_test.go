@@ -23,9 +23,15 @@ func TestQueryLogFilter(t *testing.T) {
 		TS:     "2026-07-27T10:00:00.000Z",
 		Body:   json.RawMessage(`{"text":"first note"}`),
 	}
-	j.PrepareEvent(ev1)
-	ev1.Sign(ownerID)
-	j.Append(ev1)
+	if err := j.PrepareEvent(ev1); err != nil {
+		t.Fatalf("prepare ev1: %v", err)
+	}
+	if err := ev1.Sign(ownerID); err != nil {
+		t.Fatalf("sign ev1: %v", err)
+	}
+	if err := j.Append(ev1); err != nil {
+		t.Fatalf("append ev1: %v", err)
+	}
 
 	// Append decision 1
 	ev2 := &event.Event{
@@ -37,9 +43,15 @@ func TestQueryLogFilter(t *testing.T) {
 		TS:     "2026-07-27T11:00:00.000Z",
 		Body:   json.RawMessage(`{"text":"decision 1"}`),
 	}
-	j.PrepareEvent(ev2)
-	ev2.Sign(ownerID)
-	j.Append(ev2)
+	if err := j.PrepareEvent(ev2); err != nil {
+		t.Fatalf("prepare ev2: %v", err)
+	}
+	if err := ev2.Sign(ownerID); err != nil {
+		t.Fatalf("sign ev2: %v", err)
+	}
+	if err := j.Append(ev2); err != nil {
+		t.Fatalf("append ev2: %v", err)
+	}
 
 	// Filter by kind=note.posted
 	res, err := j.QueryLog(LogFilter{Kind: event.KindNotePosted})

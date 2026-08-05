@@ -42,7 +42,9 @@ func TestArtifactLinkUnlinkList(t *testing.T) {
 	}
 
 	// 3. Modify artifact file -> status modified
-	os.WriteFile(docPath, []byte("modified content"), 0644)
+	if err := os.WriteFile(docPath, []byte("modified content"), 0644); err != nil {
+		t.Fatalf("write file: %v", err)
+	}
 	listMod, _ := List(tempDir, tempDir)
 	if len(listMod) != 1 || listMod[0].Status != "modified" {
 		t.Errorf("expected status modified, got %s", listMod[0].Status)
@@ -66,8 +68,10 @@ func TestArtifactOutsideRootRefused(t *testing.T) {
 	ownerID, _ := identity.Generate("owner")
 
 	outsidePath := filepath.Join(os.TempDir(), "outside.txt")
-	os.WriteFile(outsidePath, []byte("outside"), 0644)
-	defer os.Remove(outsidePath)
+	if err := os.WriteFile(outsidePath, []byte("outside"), 0644); err != nil {
+		t.Fatalf("write file: %v", err)
+	}
+	defer func() { _ = os.Remove(outsidePath) }()
 
 	_, err := Link(tempDir, tempDir, outsidePath, "Outside Doc", ownerID)
 	if err == nil {

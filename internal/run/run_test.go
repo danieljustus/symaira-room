@@ -26,7 +26,9 @@ func TestRunLifecycleAndStateTransitions(t *testing.T) {
 	var b struct {
 		RunID string `json:"run_id"`
 	}
-	json.Unmarshal(evReq.Body, &b)
+	if err := json.Unmarshal(evReq.Body, &b); err != nil {
+		t.Fatalf("unmarshal request body: %v", err)
+	}
 	runID := b.RunID
 
 	r, err := Get(tempDir, runID)
@@ -54,9 +56,15 @@ func TestRunLifecycleAndStateTransitions(t *testing.T) {
 		Kind:   event.KindRunApproved,
 		Body:   json.RawMessage(appBody),
 	}
-	j.PrepareEvent(evApp)
-	evApp.Sign(ownerID)
-	j.Append(evApp)
+	if err := j.PrepareEvent(evApp); err != nil {
+		t.Fatalf("PrepareEvent failed: %v", err)
+	}
+	if err := evApp.Sign(ownerID); err != nil {
+		t.Fatalf("Sign failed: %v", err)
+	}
+	if err := j.Append(evApp); err != nil {
+		t.Fatalf("Append failed: %v", err)
+	}
 
 	rApproved, _ := Get(tempDir, runID)
 	if rApproved.State != StateApproved {
@@ -95,7 +103,9 @@ func TestPendingRunsList(t *testing.T) {
 	var b1 struct {
 		RunID string `json:"run_id"`
 	}
-	json.Unmarshal(ev1.Body, &b1)
+	if err := json.Unmarshal(ev1.Body, &b1); err != nil {
+		t.Fatalf("unmarshal request body: %v", err)
+	}
 
 	listPending, err := List(tempDir, true)
 	if err != nil {

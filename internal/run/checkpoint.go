@@ -71,7 +71,9 @@ func ResolveCheckpoint(roomDir, chkID, answer string, id *identity.Identity) (*e
 
 	state := members.NewState()
 	for _, e := range merged {
-		state.ApplyEvent(e)
+		if err := state.ApplyEvent(e); err != nil {
+			return nil, err
+		}
 	}
 	m, exists := state.Members[id.MemberID]
 	if exists && m.Role == members.RoleAgent {

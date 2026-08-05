@@ -21,7 +21,9 @@ func TestWaitApprovedPromptly(t *testing.T) {
 	var bReq struct {
 		RunID string `json:"run_id"`
 	}
-	json.Unmarshal(evReq.Body, &bReq)
+	if err := json.Unmarshal(evReq.Body, &bReq); err != nil {
+		t.Fatalf("unmarshal request body: %v", err)
+	}
 	runID := bReq.RunID
 
 	// Approve run asynchronously after 50ms
@@ -36,9 +38,15 @@ func TestWaitApprovedPromptly(t *testing.T) {
 			Kind:   event.KindRunApproved,
 			Body:   []byte(`{"run_id":"` + runID + `"}`),
 		}
-		j.PrepareEvent(evApp)
-		evApp.Sign(ownerID)
-		j.Append(evApp)
+		if err := j.PrepareEvent(evApp); err != nil {
+			t.Errorf("prepare approval event: %v", err)
+		}
+		if err := evApp.Sign(ownerID); err != nil {
+			t.Errorf("sign approval event: %v", err)
+		}
+		if err := j.Append(evApp); err != nil {
+			t.Errorf("append approval event: %v", err)
+		}
 	}()
 
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
@@ -65,7 +73,9 @@ func TestWaitTimeout(t *testing.T) {
 	var bTimeout struct {
 		RunID string `json:"run_id"`
 	}
-	json.Unmarshal(evReq.Body, &bTimeout)
+	if err := json.Unmarshal(evReq.Body, &bTimeout); err != nil {
+		t.Fatalf("unmarshal request body: %v", err)
+	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
 	defer cancel()

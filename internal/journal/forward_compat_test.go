@@ -30,7 +30,9 @@ func TestForwardCompatibilityUnknownEventKind(t *testing.T) {
 		Body:    bodyBytes,
 	}
 
-	j.PrepareEvent(evUnknown)
+	if err := j.PrepareEvent(evUnknown); err != nil {
+		t.Fatalf("failed to prepare unknown event: %v", err)
+	}
 	if err := evUnknown.Sign(ownerID); err != nil {
 		t.Fatalf("failed to sign unknown event: %v", err)
 	}

@@ -77,8 +77,12 @@ func TestChainTamperingDetection(t *testing.T) {
 			Kind:    event.KindNotePosted,
 			Body:    json.RawMessage(`{"text":"hello"}`),
 		}
-		ev.Sign(id)
-		j.Append(ev)
+		if err := ev.Sign(id); err != nil {
+			t.Fatalf("sign failed: %v", err)
+		}
+		if err := j.Append(ev); err != nil {
+			t.Fatalf("append failed: %v", err)
+		}
 	}
 
 	// Tamper line 2 in file
@@ -128,7 +132,9 @@ func TestConcurrentAppendsDifferentSegments(t *testing.T) {
 				Kind:    event.KindNotePosted,
 				Body:    json.RawMessage(`{"text":"work"}`),
 			}
-			ev.Sign(id)
+			if err := ev.Sign(id); err != nil {
+				t.Errorf("worker sign error: %v", err)
+			}
 			if err := j.Append(ev); err != nil {
 				t.Errorf("worker append error: %v", err)
 			}

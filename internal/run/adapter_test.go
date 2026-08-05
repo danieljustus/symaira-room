@@ -34,11 +34,15 @@ func TestExecuteAdapterEndToEnd(t *testing.T) {
 	var bReq struct {
 		RunID string `json:"run_id"`
 	}
-	json.Unmarshal(evReq.Body, &bReq)
+	if err := json.Unmarshal(evReq.Body, &bReq); err != nil {
+		t.Fatalf("unmarshal request body: %v", err)
+	}
 	runID := bReq.RunID
 
 	// Approve run with scope shell
-	approval.Approve(tempDir, runID, "shell", 10*time.Minute, ownerID)
+	if _, err := approval.Approve(tempDir, runID, "shell", 10*time.Minute, ownerID); err != nil {
+		t.Fatalf("Approve failed: %v", err)
+	}
 
 	// Execute adapter
 	err := run.ExecuteAdapter(context.Background(), tempDir, runID, ownerID, cfg)
@@ -90,11 +94,15 @@ func TestExecuteAdapterScopeRefused(t *testing.T) {
 	var bReq struct {
 		RunID string `json:"run_id"`
 	}
-	json.Unmarshal(evReq.Body, &bReq)
+	if err := json.Unmarshal(evReq.Body, &bReq); err != nil {
+		t.Fatalf("unmarshal request body: %v", err)
+	}
 	runID := bReq.RunID
 
 	// Approve run with scope read_only (not dangerous_shell)
-	approval.Approve(tempDir, runID, "read_only", 10*time.Minute, ownerID)
+	if _, err := approval.Approve(tempDir, runID, "read_only", 10*time.Minute, ownerID); err != nil {
+		t.Fatalf("Approve failed: %v", err)
+	}
 
 	err := run.ExecuteAdapter(context.Background(), tempDir, runID, ownerID, cfg)
 	if err == nil {
@@ -121,10 +129,14 @@ func TestExecuteAdapterNonZeroExitFailsRun(t *testing.T) {
 	var bReq struct {
 		RunID string `json:"run_id"`
 	}
-	json.Unmarshal(evReq.Body, &bReq)
+	if err := json.Unmarshal(evReq.Body, &bReq); err != nil {
+		t.Fatalf("unmarshal request body: %v", err)
+	}
 	runID := bReq.RunID
 
-	approval.Approve(tempDir, runID, "failing", 10*time.Minute, ownerID)
+	if _, err := approval.Approve(tempDir, runID, "failing", 10*time.Minute, ownerID); err != nil {
+		t.Fatalf("Approve failed: %v", err)
+	}
 
 	err := run.ExecuteAdapter(context.Background(), tempDir, runID, ownerID, cfg)
 	if err == nil {

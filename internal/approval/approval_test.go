@@ -34,7 +34,9 @@ func TestApproveAndDenyWithScopeAndTTL(t *testing.T) {
 	var bReq struct {
 		RunID string `json:"run_id"`
 	}
-	json.Unmarshal(evReq.Body, &bReq)
+	if err := json.Unmarshal(evReq.Body, &bReq); err != nil {
+		t.Fatalf("unmarshal request body: %v", err)
+	}
 	runID := bReq.RunID
 
 	// 2. Approve run with scope and TTL
@@ -58,7 +60,9 @@ func TestApproveAndDenyWithScopeAndTTL(t *testing.T) {
 func TestAgentApprovalForbidden(t *testing.T) {
 	tempDir := t.TempDir()
 	ownerID, _ := identity.Generate("owner")
-	room.Init(tempDir, "Test Room", ownerID)
+	if _, err := room.Init(tempDir, "Test Room", ownerID); err != nil {
+		t.Fatalf("Init room failed: %v", err)
+	}
 
 	agentID, _ := identity.Generate("bot_worker")
 
@@ -78,15 +82,23 @@ func TestAgentApprovalForbidden(t *testing.T) {
 		Kind:   event.KindMemberAdded,
 		Body:   json.RawMessage(agentBody),
 	}
-	j.PrepareEvent(evAdd)
-	evAdd.Sign(ownerID)
-	j.Append(evAdd)
+	if err := j.PrepareEvent(evAdd); err != nil {
+		t.Fatalf("PrepareEvent failed: %v", err)
+	}
+	if err := evAdd.Sign(ownerID); err != nil {
+		t.Fatalf("Sign failed: %v", err)
+	}
+	if err := j.Append(evAdd); err != nil {
+		t.Fatalf("Append failed: %v", err)
+	}
 
 	evReq, _ := run.Request(tempDir, "Bot Run", "", "", ownerID)
 	var bBot struct {
 		RunID string `json:"run_id"`
 	}
-	json.Unmarshal(evReq.Body, &bBot)
+	if err := json.Unmarshal(evReq.Body, &bBot); err != nil {
+		t.Fatalf("unmarshal request body: %v", err)
+	}
 
 	// Agent attempts to approve -> refused
 	_, err := Approve(tempDir, bBot.RunID, "all", 10*time.Minute, agentID)
@@ -101,16 +113,22 @@ func TestAgentApprovalForbidden(t *testing.T) {
 func TestExpiredApprovalBlocksStart(t *testing.T) {
 	tempDir := t.TempDir()
 	ownerID, _ := identity.Generate("owner")
-	room.Init(tempDir, "Test Room", ownerID)
+	if _, err := room.Init(tempDir, "Test Room", ownerID); err != nil {
+		t.Fatalf("Init room failed: %v", err)
+	}
 
 	evReq, _ := run.Request(tempDir, "Fast Expire Run", "", "", ownerID)
 	var bFast struct {
 		RunID string `json:"run_id"`
 	}
-	json.Unmarshal(evReq.Body, &bFast)
+	if err := json.Unmarshal(evReq.Body, &bFast); err != nil {
+		t.Fatalf("unmarshal request body: %v", err)
+	}
 
 	// Approve with negative TTL -> immediately expired
-	Approve(tempDir, bFast.RunID, "all", -1*time.Minute, ownerID)
+	if _, err := Approve(tempDir, bFast.RunID, "all", -1*time.Minute, ownerID); err != nil {
+		t.Fatalf("Approve failed: %v", err)
+	}
 
 	_, err := run.Start(tempDir, bFast.RunID, ownerID)
 	if err == nil {
