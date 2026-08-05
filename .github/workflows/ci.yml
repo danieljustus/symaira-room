@@ -3,12 +3,8 @@ name: CI
 on:
   push:
     branches: [ main ]
-    paths-ignore:
-      - 'docs/**'
   pull_request:
     branches: [ main ]
-    paths-ignore:
-      - 'docs/**'
 
 
 concurrency:
@@ -40,7 +36,10 @@ jobs:
       - name: Run go vet
         run: go vet ./...
 
-      # TODO: re-enable golangci-lint once compatible with Go 1.26
+      - name: Run golangci-lint
+        uses: golangci/golangci-lint-action@v9
+        with:
+          version: v2.12.2
 
       - name: Build packages
         run: CGO_ENABLED=0 go build ./...
