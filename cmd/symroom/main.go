@@ -827,11 +827,11 @@ func main() {
 			if err != nil {
 				if errors.Is(err, run.ErrWaitTimeout) {
 					fmt.Fprintf(os.Stderr, "Error: wait timed out for run %s\n", runID)
-					os.Exit(11)
+					os.Exit(int(exitcodes.ExitInterrupted))
 				}
 				if errors.Is(err, run.ErrRunDenied) {
 					fmt.Fprintf(os.Stderr, "Error: run %s was denied\n", runID)
-					os.Exit(10)
+					os.Exit(int(exitcodes.ExitForbidden))
 				}
 				fmt.Fprintf(os.Stderr, "Error waiting for run %s: %v\n", runID, err)
 				os.Exit(int(exitcodes.ExitGeneric))
@@ -972,7 +972,7 @@ func main() {
 			if err != nil {
 				if errors.Is(err, run.ErrWaitTimeout) {
 					fmt.Fprintf(os.Stderr, "Error: wait timed out for checkpoint %s\n", b.CheckpointID)
-					os.Exit(11)
+					os.Exit(int(exitcodes.ExitInterrupted))
 				}
 				fmt.Fprintf(os.Stderr, "Error waiting for checkpoint: %v\n", err)
 				os.Exit(int(exitcodes.ExitGeneric))
