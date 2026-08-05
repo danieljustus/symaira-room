@@ -34,7 +34,11 @@ jobs:
           version: '~> v2'
           args: check
       - name: Install cosign
-        uses: sigstore/cosign-installer@v3.8.1
+        uses: sigstore/cosign-installer@v4.1.2
+        with:
+          # v4 defaults to Cosign v3, whose sign-blob requires --bundle.
+          # goreleaser signs with the v2 invocation, so pin the last v2 release.
+          cosign-release: 'v2.6.4'
       - name: Install syft
         run: |
           curl -sSfL https://raw.githubusercontent.com/anchore/syft/main/install.sh | sh -s -- -b "$RUNNER_TEMP/bin"
