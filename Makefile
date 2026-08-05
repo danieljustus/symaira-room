@@ -19,11 +19,11 @@ coverage:
 	go tool cover -func=coverage.out | tail -1
 
 coverage-check:
-	@COVERAGE_THRESHOLD ?= 60
-	@go test -coverprofile=coverage.out ./... >/dev/null
-	@COVERAGE=$$(go tool cover -func=coverage.out | awk '/^total:/ {gsub("%","",$$3); print $$3}'); \
-	echo "Coverage: $$COVERAGE% (threshold: $(COVERAGE_THRESHOLD)%)"; \
-	awk "BEGIN {exit !($$COVERAGE >= $(COVERAGE_THRESHOLD))}" || { echo "Coverage below threshold" >&2; exit 1; }
+	@THRESH=$${COVERAGE_THRESHOLD:-60}; \
+	go test -coverprofile=coverage.out ./... >/dev/null; \
+	COVERAGE=$$(go tool cover -func=coverage.out | awk '/^total:/ {gsub("%","",$$3); print $$3}'); \
+	echo "Coverage: $$COVERAGE% (threshold: $$THRESH%)"; \
+	awk "BEGIN {exit !($$COVERAGE >= $$THRESH)}" || { echo "Coverage below threshold" >&2; exit 1; }
 
 lint:
 	gofmt -s -w .
