@@ -179,16 +179,8 @@ func main() {
 			fmt.Println("Usage: symroom init <dir> --identity <name> [--name <display_name>]")
 			os.Exit(int(exitcodes.ExitOK))
 		}
-		if idName == "" {
-			fmt.Fprintln(os.Stderr, "Error: --identity is required when default_identity is not configured")
-			os.Exit(int(exitcodes.ExitNoInput))
-		}
 
-		id, err := identity.Load(idName)
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error loading identity %s: %v\n", idName, err)
-			os.Exit(int(exitcodes.ExitNotFound))
-		}
+		id := resolveIdentity(*idFlag)
 
 		roomCfg, err := room.Init(targetDir, *nameFlag, id)
 		if err != nil {
@@ -227,7 +219,7 @@ func main() {
 				_, _ = fmt.Fprintln(os.Stderr, "       symroom member add --pubkey <hex> --name <name> [--role <role>] [--kind <kind>] [--identity <name>]")
 				os.Exit(int(exitcodes.ExitNoInput))
 			}
-			id := loadCallerIdentity(*idFlag)
+			id := resolveIdentity(*idFlag)
 			ev, err := room.AddMember(".", memberName, pubKeyHex, members.Role(*roleFlag), members.MemberKind(*kindFlag), id)
 			if err != nil {
 				exitMemberError(err)
@@ -273,7 +265,7 @@ func main() {
 				_, _ = fmt.Fprintln(os.Stderr, "Usage: symroom member remove [--identity <name>] <member_id>")
 				os.Exit(int(exitcodes.ExitNoInput))
 			}
-			id := loadCallerIdentity(*idFlag)
+			id := resolveIdentity(*idFlag)
 			memberID := fs.Arg(0)
 			ev, err := room.RemoveMember(".", memberID, id)
 			if err != nil {
@@ -291,7 +283,7 @@ func main() {
 				_, _ = fmt.Fprintln(os.Stderr, "Usage: symroom member role [--identity <name>] <member_id> <role>")
 				os.Exit(int(exitcodes.ExitNoInput))
 			}
-			id := loadCallerIdentity(*idFlag)
+			id := resolveIdentity(*idFlag)
 			memberID, roleStr := fs.Arg(0), fs.Arg(1)
 			ev, err := room.SetMemberRole(".", memberID, members.Role(roleStr), id)
 			if err != nil {
@@ -315,20 +307,7 @@ func main() {
 			os.Exit(int(exitcodes.ExitOK))
 		}
 		msg := fs.Arg(0)
-		idName := *idFlag
-		if idName == "" {
-			cfg := config.LoadOrExit()
-			idName = cfg.DefaultIdentity
-		}
-		if idName == "" {
-			fmt.Fprintln(os.Stderr, "Error: --identity is required when default_identity is not configured")
-			os.Exit(int(exitcodes.ExitNoInput))
-		}
-		id, err := identity.Load(idName)
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error loading identity %s: %v\n", idName, err)
-			os.Exit(int(exitcodes.ExitNotFound))
-		}
+		id := resolveIdentity(*idFlag)
 		ev, err := room.PostNote(".", msg, id)
 		if err != nil {
 			if errors.Is(err, members.ErrObserverForbidden) {
@@ -358,20 +337,7 @@ func main() {
 			os.Exit(int(exitcodes.ExitOK))
 		}
 		msg := fs.Arg(0)
-		idName := *idFlag
-		if idName == "" {
-			cfg := config.LoadOrExit()
-			idName = cfg.DefaultIdentity
-		}
-		if idName == "" {
-			fmt.Fprintln(os.Stderr, "Error: --identity is required when default_identity is not configured")
-			os.Exit(int(exitcodes.ExitNoInput))
-		}
-		id, err := identity.Load(idName)
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error loading identity %s: %v\n", idName, err)
-			os.Exit(int(exitcodes.ExitNotFound))
-		}
+		id := resolveIdentity(*idFlag)
 		var refs []string
 		if *refsFlag != "" {
 			refs = strings.Split(*refsFlag, ",")
@@ -500,20 +466,7 @@ func main() {
 				os.Exit(int(exitcodes.ExitNoInput))
 			}
 			filePath := fs.Arg(0)
-			idName := *idFlag
-			if idName == "" {
-				cfg := config.LoadOrExit()
-				idName = cfg.DefaultIdentity
-			}
-			if idName == "" {
-				fmt.Fprintln(os.Stderr, "Error: --identity is required when default_identity is not configured")
-				os.Exit(int(exitcodes.ExitNoInput))
-			}
-			id, err := identity.Load(idName)
-			if err != nil {
-				fmt.Fprintf(os.Stderr, "Error loading identity %s: %v\n", idName, err)
-				os.Exit(int(exitcodes.ExitNotFound))
-			}
+			id := resolveIdentity(*idFlag)
 			ev, err := artifact.Link(".", "", filePath, *titleFlag, id)
 			if err != nil {
 				if errors.Is(err, artifact.ErrOutsideRoot) {
@@ -537,20 +490,7 @@ func main() {
 				os.Exit(int(exitcodes.ExitNoInput))
 			}
 			artID := fs.Arg(0)
-			idName := *idFlag
-			if idName == "" {
-				cfg := config.LoadOrExit()
-				idName = cfg.DefaultIdentity
-			}
-			if idName == "" {
-				fmt.Fprintln(os.Stderr, "Error: --identity is required when default_identity is not configured")
-				os.Exit(int(exitcodes.ExitNoInput))
-			}
-			id, err := identity.Load(idName)
-			if err != nil {
-				fmt.Fprintf(os.Stderr, "Error loading identity %s: %v\n", idName, err)
-				os.Exit(int(exitcodes.ExitNotFound))
-			}
+			id := resolveIdentity(*idFlag)
 			ev, err := artifact.Unlink(".", artID, id)
 			if err != nil {
 				fmt.Fprintf(os.Stderr, "Error unlinking artifact: %v\n", err)
@@ -597,21 +537,7 @@ func main() {
 			os.Exit(int(exitcodes.ExitOK))
 		}
 
-		idName := *idFlag
-		if idName == "" {
-			cfg := config.LoadOrExit()
-			idName = cfg.DefaultIdentity
-		}
-		if idName == "" {
-			fmt.Fprintln(os.Stderr, "Error: --identity is required when default_identity is not configured")
-			os.Exit(int(exitcodes.ExitNoInput))
-		}
-
-		id, err := identity.Load(idName)
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error loading identity %s: %v\n", idName, err)
-			os.Exit(int(exitcodes.ExitNotFound))
-		}
+		id := resolveIdentity(*idFlag)
 
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
@@ -654,20 +580,7 @@ func main() {
 				fmt.Fprintln(os.Stderr, "Error: --title is required")
 				os.Exit(int(exitcodes.ExitNoInput))
 			}
-			idName := *idFlag
-			if idName == "" {
-				cfg := config.LoadOrExit()
-				idName = cfg.DefaultIdentity
-			}
-			if idName == "" {
-				fmt.Fprintln(os.Stderr, "Error: --identity is required when default_identity is not configured")
-				os.Exit(int(exitcodes.ExitNoInput))
-			}
-			id, err := identity.Load(idName)
-			if err != nil {
-				fmt.Fprintf(os.Stderr, "Error loading identity %s: %v\n", idName, err)
-				os.Exit(int(exitcodes.ExitNotFound))
-			}
+			id := resolveIdentity(*idFlag)
 			ev, err := run.Request(".", *titleFlag, *planFlag, *adapterFlag, id)
 			if err != nil {
 				fmt.Fprintf(os.Stderr, "Error requesting run: %v\n", err)
@@ -745,20 +658,7 @@ func main() {
 				fmt.Fprintln(os.Stderr, "Usage: symroom run start <run_id> [--identity <name>]")
 				os.Exit(int(exitcodes.ExitNoInput))
 			}
-			idName := *idFlag
-			if idName == "" {
-				cfg := config.LoadOrExit()
-				idName = cfg.DefaultIdentity
-			}
-			if idName == "" {
-				fmt.Fprintln(os.Stderr, "Error: --identity is required when default_identity is not configured")
-				os.Exit(int(exitcodes.ExitNoInput))
-			}
-			id, err := identity.Load(idName)
-			if err != nil {
-				fmt.Fprintf(os.Stderr, "Error loading identity %s: %v\n", idName, err)
-				os.Exit(int(exitcodes.ExitNotFound))
-			}
+			id := resolveIdentity(*idFlag)
 			ev, err := run.Start(".", fs.Arg(0), id)
 			if err != nil {
 				if errors.Is(err, run.ErrInvalidTransition) {
@@ -782,20 +682,7 @@ func main() {
 				fmt.Fprintln(os.Stderr, "Usage: symroom run cancel <run_id> [--reason ...] [--identity <name>]")
 				os.Exit(int(exitcodes.ExitNoInput))
 			}
-			idName := *idFlag
-			if idName == "" {
-				cfg := config.LoadOrExit()
-				idName = cfg.DefaultIdentity
-			}
-			if idName == "" {
-				fmt.Fprintln(os.Stderr, "Error: --identity is required when default_identity is not configured")
-				os.Exit(int(exitcodes.ExitNoInput))
-			}
-			id, err := identity.Load(idName)
-			if err != nil {
-				fmt.Fprintf(os.Stderr, "Error loading identity %s: %v\n", idName, err)
-				os.Exit(int(exitcodes.ExitNotFound))
-			}
+			id := resolveIdentity(*idFlag)
 			ev, err := run.Cancel(".", fs.Arg(0), *reasonFlag, id)
 			if err != nil {
 				if errors.Is(err, run.ErrInvalidTransition) {
@@ -857,20 +744,7 @@ func main() {
 				fmt.Fprintln(os.Stderr, "Usage: symroom run approve <run_id> [--scope ...] [--ttl 30m] [--identity <name>]")
 				os.Exit(int(exitcodes.ExitNoInput))
 			}
-			idName := *idFlag
-			if idName == "" {
-				cfg := config.LoadOrExit()
-				idName = cfg.DefaultIdentity
-			}
-			if idName == "" {
-				fmt.Fprintln(os.Stderr, "Error: --identity is required when default_identity is not configured")
-				os.Exit(int(exitcodes.ExitNoInput))
-			}
-			id, err := identity.Load(idName)
-			if err != nil {
-				fmt.Fprintf(os.Stderr, "Error loading identity %s: %v\n", idName, err)
-				os.Exit(int(exitcodes.ExitNotFound))
-			}
+			id := resolveIdentity(*idFlag)
 			ev, err := approval.Approve(".", fs.Arg(0), *scopeFlag, *ttlFlag, id)
 			if err != nil {
 				if errors.Is(err, approval.ErrAgentApprovalForbidden) {
@@ -894,20 +768,7 @@ func main() {
 				fmt.Fprintln(os.Stderr, "Usage: symroom run deny <run_id> --reason ... [--identity <name>]")
 				os.Exit(int(exitcodes.ExitNoInput))
 			}
-			idName := *idFlag
-			if idName == "" {
-				cfg := config.LoadOrExit()
-				idName = cfg.DefaultIdentity
-			}
-			if idName == "" {
-				fmt.Fprintln(os.Stderr, "Error: --identity is required when default_identity is not configured")
-				os.Exit(int(exitcodes.ExitNoInput))
-			}
-			id, err := identity.Load(idName)
-			if err != nil {
-				fmt.Fprintf(os.Stderr, "Error loading identity %s: %v\n", idName, err)
-				os.Exit(int(exitcodes.ExitNotFound))
-			}
+			id := resolveIdentity(*idFlag)
 			ev, err := approval.Deny(".", fs.Arg(0), *reasonFlag, id)
 			if err != nil {
 				fmt.Fprintf(os.Stderr, "Error denying run: %v\n", err)
@@ -941,20 +802,7 @@ func main() {
 				fmt.Fprintln(os.Stderr, "Usage: symroom checkpoint request --run <id> --question \"...\" [--identity <name>]")
 				os.Exit(int(exitcodes.ExitNoInput))
 			}
-			idName := *idFlag
-			if idName == "" {
-				cfg := config.LoadOrExit()
-				idName = cfg.DefaultIdentity
-			}
-			if idName == "" {
-				fmt.Fprintln(os.Stderr, "Error: --identity is required when default_identity is not configured")
-				os.Exit(int(exitcodes.ExitNoInput))
-			}
-			id, err := identity.Load(idName)
-			if err != nil {
-				fmt.Fprintf(os.Stderr, "Error loading identity %s: %v\n", idName, err)
-				os.Exit(int(exitcodes.ExitNotFound))
-			}
+			id := resolveIdentity(*idFlag)
 			ev, err := run.RequestCheckpoint(".", *runFlag, *qFlag, id)
 			if err != nil {
 				fmt.Fprintf(os.Stderr, "Error requesting checkpoint: %v\n", err)
@@ -992,20 +840,7 @@ func main() {
 				os.Exit(int(exitcodes.ExitNoInput))
 			}
 			chkID := fs.Arg(0)
-			idName := *idFlag
-			if idName == "" {
-				cfg := config.LoadOrExit()
-				idName = cfg.DefaultIdentity
-			}
-			if idName == "" {
-				fmt.Fprintln(os.Stderr, "Error: --identity is required when default_identity is not configured")
-				os.Exit(int(exitcodes.ExitNoInput))
-			}
-			id, err := identity.Load(idName)
-			if err != nil {
-				fmt.Fprintf(os.Stderr, "Error loading identity %s: %v\n", idName, err)
-				os.Exit(int(exitcodes.ExitNotFound))
-			}
+			id := resolveIdentity(*idFlag)
 			ev, err := run.ResolveCheckpoint(".", chkID, *answerFlag, id)
 			if err != nil {
 				if errors.Is(err, run.ErrAgentCheckpointResolveForbidden) {
@@ -1093,20 +928,7 @@ func main() {
 		if err := fs.Parse(os.Args[2:]); err != nil {
 			os.Exit(int(exitcodes.ExitNoInput))
 		}
-		name := *identityName
-		if name == "" {
-			cfg := config.LoadOrExit()
-			name = cfg.DefaultIdentity
-		}
-		if name == "" {
-			fmt.Fprintln(os.Stderr, "Error: --identity is required")
-			os.Exit(int(exitcodes.ExitNoInput))
-		}
-		id, err := identity.Load(name)
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error loading identity: %v\n", err)
-			os.Exit(int(exitcodes.ExitNotFound))
-		}
+		id := resolveIdentity(*identityName)
 		if err := mcp.NewServer(*roomDir, id, *artifactRoot).ServeStdio(context.Background()); err != nil {
 			fmt.Fprintln(os.Stderr, err)
 			os.Exit(int(exitcodes.ExitGeneric))
@@ -1121,9 +943,9 @@ func main() {
 	}
 }
 
-// loadCallerIdentity resolves the identity used to sign journal events,
+// resolveIdentity resolves the identity used to sign journal events,
 // falling back to the configured default identity.
-func loadCallerIdentity(idName string) *identity.Identity {
+func resolveIdentity(idName string) *identity.Identity {
 	if idName == "" {
 		cfg := config.LoadOrExit()
 		idName = cfg.DefaultIdentity
