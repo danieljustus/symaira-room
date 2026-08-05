@@ -1,6 +1,7 @@
 package room
 
 import (
+	"bytes"
 	"crypto/rand"
 
 	"encoding/hex"
@@ -11,6 +12,7 @@ import (
 	"path/filepath"
 	"time"
 
+	"github.com/BurntSushi/toml"
 	"github.com/danieljustus/symaira-corekit/fsutil"
 	"github.com/danieljustus/symaira-room/internal/event"
 	"github.com/danieljustus/symaira-room/internal/identity"
@@ -21,16 +23,16 @@ var (
 )
 
 type RoomConfig struct {
-	SchemaVersion int    `json:"schema_version"`
-	ID            string `json:"id"`
-	Created       string `json:"created"`
-	RootPubkey    string `json:"root_pubkey"`
-	RootEvent     string `json:"root_event"`
+	SchemaVersion int    `json:"schema_version" toml:"schema_version"`
+	ID            string `json:"id" toml:"id"`
+	Created       string `json:"created" toml:"created"`
+	RootPubkey    string `json:"root_pubkey" toml:"root_pubkey"`
+	RootEvent     string `json:"root_event" toml:"root_event"`
 }
 
 type LocalConfig struct {
-	Identity     string `json:"identity"`
-	ArtifactRoot string `json:"artifact_root"`
+	Identity     string `json:"identity" toml:"identity"`
+	ArtifactRoot string `json:"artifact_root" toml:"artifact_root"`
 }
 
 func GenerateRoomID() string {
@@ -105,14 +107,19 @@ func Init(dir, name string, id *identity.Identity) (*RoomConfig, error) {
 	}
 
 	// 2. Write room.toml
-	roomTOMLContent := fmt.Sprintf(`schema_version = 1
-id = "%s"
-created = "%s"
-root_pubkey = "ed25519:%s"
-root_event = "%s"
-`, roomID, nowStr, hex.EncodeToString(id.PublicKey), eventID)
+	roomCfg := &RoomConfig{
+		SchemaVersion: 1,
+		ID:            roomID,
+		Created:       nowStr,
+		RootPubkey:    "ed25519:" + hex.EncodeToString(id.PublicKey),
+		RootEvent:     eventID,
+	}
 
-	if err := fsutil.AtomicWriteFile(filepath.Join(absDir, "room.toml"), []byte(roomTOMLContent), 0644); err != nil {
+	var roomTOMLBuf bytes.Buffer
+	if err := toml.NewEncoder(&roomTOMLBuf).Encode(roomCfg); err != nil {
+		return nil, fmt.Errorf("encode room.toml: %w", err)
+	}
+	if err := fsutil.AtomicWriteFile(filepath.Join(absDir, "room.toml"), roomTOMLBuf.Bytes(), 0644); err != nil {
 		return nil, fmt.Errorf("write room.toml: %w", err)
 	}
 
@@ -122,10 +129,15 @@ root_event = "%s"
 		return nil, fmt.Errorf("mkdir .symroom: %w", err)
 	}
 
-	localTOMLContent := fmt.Sprintf(`identity = "%s"
-artifact_root = ""
-`, id.Name)
-	if err := fsutil.AtomicWriteFile(filepath.Join(dotSymroom, "local.toml"), []byte(localTOMLContent), 0644); err != nil {
+	localCfg := LocalConfig{
+		Identity:     id.Name,
+		ArtifactRoot: "",
+	}
+	var localTOMLBuf bytes.Buffer
+	if err := toml.NewEncoder(&localTOMLBuf).Encode(localCfg); err != nil {
+		return nil, fmt.Errorf("encode .symroom/local.toml: %w", err)
+	}
+	if err := fsutil.AtomicWriteFile(filepath.Join(dotSymroom, "local.toml"), localTOMLBuf.Bytes(), 0644); err != nil {
 		return nil, fmt.Errorf("write .symroom/local.toml: %w", err)
 	}
 
@@ -138,11 +150,5 @@ artifact_root = ""
 		}
 	}
 
-	return &RoomConfig{
-		SchemaVersion: 1,
-		ID:            roomID,
-		Created:       nowStr,
-		RootPubkey:    "ed25519:" + hex.EncodeToString(id.PublicKey),
-		RootEvent:     eventID,
-	}, nil
+	return roomCfg, nil
 }
