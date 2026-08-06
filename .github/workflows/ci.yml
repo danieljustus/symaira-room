@@ -62,3 +62,34 @@ jobs:
 
       - name: Run govulncheck
         run: govulncheck ./...
+
+  client:
+    name: Client (Swift)
+    runs-on: macos-15
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Check Go/Swift schema version alignment
+        run: |
+          GO_SCHEMA=$(sed -n 's/const SchemaVersion = \([0-9]*\).*/\1/p' internal/version/version.go | head -1)
+          SWIFT_SCHEMA=$(sed -n 's/.*expectedSchemaVersion = \([0-9]*\).*/\1/p' client/Sources/SymroomFeature/SymroomModule.swift | head -1)
+          if [ -z "$GO_SCHEMA" ]; then
+            echo "::error::Could not extract schema version from internal/version/version.go"
+            exit 1
+          fi
+          if [ -z "$SWIFT_SCHEMA" ]; then
+            echo "::error::Could not extract schema version from client/Sources/SymroomFeature/SymroomModule.swift"
+            exit 1
+          fi
+          if [ "$GO_SCHEMA" != "$SWIFT_SCHEMA" ]; then
+            echo "::error::Schema version mismatch! Go: $GO_SCHEMA, Swift: $SWIFT_SCHEMA"
+            exit 1
+          fi
+          echo "Schema versions match: Go=$GO_SCHEMA, Swift=$SWIFT_SCHEMA"
+
+      - name: Build client package
+        run: swift build --package-path client
+
+      - name: Run client tests
+        run: swift test --package-path client
