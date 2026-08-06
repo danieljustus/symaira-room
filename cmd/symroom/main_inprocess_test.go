@@ -165,6 +165,14 @@ func TestMainDispatchCoversSubcommands(t *testing.T) {
 	assertRun(roomDir, 0, []string{"Member added"},
 		"member", "add", "--identity", "alice", "--pubkey", hex.EncodeToString(bob.PublicKey), "--name", "bob", "--role", "agent", "--kind", "agent")
 	assertRun(roomDir, 0, []string{"Test Room", "bob"}, "member", "list")
+	membersJSON := assertRun(roomDir, 0, []string{`"id"`, `"name"`, `"role"`, `"kind"`}, "member", "list", "--json")
+	var members []map[string]any
+	if err := json.Unmarshal([]byte(membersJSON), &members); err != nil {
+		t.Errorf("member list --json output is not a JSON array: %v (%q)", err, membersJSON)
+	}
+	if len(members) != 2 {
+		t.Errorf("member list --json: got %d members, want 2 (%q)", len(members), membersJSON)
+	}
 	assertRun(roomDir, 0, []string{"Updated role for"}, "member", "role", "--identity", "alice", bobID, "member")
 	assertRun(base, 0, []string{"Created identity eve"}, "identity", "create", "eve")
 	assertRun(roomDir, 4, []string{"only room owners"},
@@ -249,5 +257,63 @@ func TestUsageTextListsSubcommands(t *testing.T) {
 		if !strings.Contains(usageText, sub) {
 			t.Errorf("usageText missing subcommand %q", sub)
 		}
+	}
+}
+
+// TestRoomDirEnvOverridesCWD verifies that SYMROOM_ROOM_DIR lets commands
+// target a room without changing the caller's working directory — the
+// mechanism the macOS hub module uses to render a selected room.
+func TestRoomDirEnvOverridesCWD(t *testing.T) {
+	base, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatalf("EvalSymlinks temp dir: %v", err)
+	}
+	xdgData := filepath.Join(base, "xdg-data")
+	xdgConfig := filepath.Join(base, "xdg-config")
+	roomDir := filepath.Join(base, "room")
+	// The caller's CWD is deliberately NOT the room: commands must work when
+	// run from base with SYMROOM_ROOM_DIR pointing at the room.
+	t.Setenv("SYMROOM_ROOM_DIR", roomDir)
+
+	assertRun := func(dir string, wantCode int, wantOut []string, args ...string) string {
+		t.Helper()
+		out, code := runMain(t, dir, xdgData, xdgConfig, args...)
+		if code != wantCode {
+			t.Errorf("args %v: exit code = %d, want %d\noutput: %s", args, code, wantCode, out)
+		}
+		for _, w := range wantOut {
+			if !strings.Contains(out, w) {
+				t.Errorf("args %v: output missing %q:\n%s", args, w, out)
+			}
+		}
+		return strings.TrimSpace(out)
+	}
+
+	// Set up the room with identities.
+	assertRun(base, 0, []string{"Created identity alice"}, "identity", "create", "alice")
+	assertRun(base, 0, []string{"Initialized room"}, "init", "--identity", "alice", "--name", "Env Room", roomDir)
+
+	// Member add/list must operate on the room even though CWD is base.
+	bob, err := identity.Generate("bob")
+	if err != nil {
+		t.Fatalf("generate bob: %v", err)
+	}
+	assertRun(base, 0, []string{"Member added"},
+		"member", "add", "--identity", "alice", "--pubkey", hex.EncodeToString(bob.PublicKey), "--name", "bob", "--role", "agent", "--kind", "agent")
+	membersJSON := assertRun(base, 0, nil, "member", "list", "--json")
+	if !strings.Contains(membersJSON, `"name": "bob"`) {
+		t.Errorf("member list --json via SYMROOM_ROOM_DIR missing bob: %q", membersJSON)
+	}
+
+	// Journal and runs follow the same resolution.
+	assertRun(base, 0, nil, "note", "--identity", "alice", "env note")
+	assertRun(base, 0, []string{"env note"}, "log")
+
+	// Without the env var, the same commands operate on CWD (base), which is
+	// not the room: the member list is empty instead of showing the room's.
+	t.Setenv("SYMROOM_ROOM_DIR", "")
+	baseJSON := assertRun(base, 0, nil, "member", "list", "--json")
+	if baseJSON != "[]" {
+		t.Errorf("member list --json without SYMROOM_ROOM_DIR: got %q, want []", baseJSON)
 	}
 }

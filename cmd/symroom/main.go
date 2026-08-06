@@ -59,6 +59,17 @@ Available Subcommands:
 Use "symroom <subcommand> --help" for more information about a subcommand.
 `
 
+// roomDir returns the room directory for commands that operate on the room.
+// Defaults to the current working directory (the CLI contract: run symroom
+// inside the room). Clients that need to target a room without changing their
+// own working directory (e.g. the macOS hub module) can set SYMROOM_ROOM_DIR.
+func roomDir() string {
+	if d := os.Getenv("SYMROOM_ROOM_DIR"); d != "" {
+		return d
+	}
+	return "."
+}
+
 func main() {
 	if len(os.Args) < 2 {
 		fmt.Fprint(os.Stderr, usageText)
@@ -165,7 +176,7 @@ func main() {
 			os.Exit(int(exitcodes.ExitNoInput))
 		}
 
-		targetDir := "."
+		targetDir := roomDir()
 		if fs.NArg() > 0 {
 			targetDir = fs.Arg(0)
 		}
@@ -220,7 +231,7 @@ func main() {
 				os.Exit(int(exitcodes.ExitNoInput))
 			}
 			id := resolveIdentity(*idFlag)
-			ev, err := room.AddMember(".", memberName, pubKeyHex, members.Role(*roleFlag), members.MemberKind(*kindFlag), id)
+			ev, err := room.AddMember(roomDir(), memberName, pubKeyHex, members.Role(*roleFlag), members.MemberKind(*kindFlag), id)
 			if err != nil {
 				exitMemberError(err)
 			}
@@ -233,13 +244,22 @@ func main() {
 			fmt.Printf("Member added: %s (%s, role: %s, kind: %s, event: %s)\n", memberName, memID, *roleFlag, *kindFlag, ev.ID)
 			os.Exit(int(exitcodes.ExitOK))
 		case "list":
-			state, err := room.ListMembers(".")
+			fs := flag.NewFlagSet("member list", flag.ExitOnError)
+			jsonFlag := fs.Bool("json", false, "Output members as JSON")
+			if err := fs.Parse(os.Args[3:]); err != nil {
+				os.Exit(int(exitcodes.ExitNoInput))
+			}
+			state, err := room.ListMembers(roomDir())
 			if err != nil {
 				fmt.Fprintf(os.Stderr, "Error listing members: %v\n", err)
 				os.Exit(int(exitcodes.ExitGeneric))
 			}
 			if len(state.Members) == 0 {
-				fmt.Println("No members")
+				if *jsonFlag {
+					fmt.Println("[]")
+				} else {
+					fmt.Println("No members")
+				}
 				os.Exit(int(exitcodes.ExitOK))
 			}
 			ids := make([]string, 0, len(state.Members))
@@ -247,6 +267,22 @@ func main() {
 				ids = append(ids, mid)
 			}
 			sort.Strings(ids)
+			if *jsonFlag {
+				type memberJSON struct {
+					ID   string `json:"id"`
+					Name string `json:"name"`
+					Role string `json:"role"`
+					Kind string `json:"kind"`
+				}
+				out := make([]memberJSON, 0, len(ids))
+				for _, mid := range ids {
+					m := state.Members[mid]
+					out = append(out, memberJSON{ID: m.ID, Name: m.Name, Role: string(m.Role), Kind: string(m.Kind)})
+				}
+				data, _ := json.MarshalIndent(out, "", "  ")
+				fmt.Println(string(data))
+				os.Exit(int(exitcodes.ExitOK))
+			}
 			w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
 			_, _ = fmt.Fprintln(w, "ID	NAME	ROLE	KIND")
 			for _, mid := range ids {
@@ -267,7 +303,7 @@ func main() {
 			}
 			id := resolveIdentity(*idFlag)
 			memberID := fs.Arg(0)
-			ev, err := room.RemoveMember(".", memberID, id)
+			ev, err := room.RemoveMember(roomDir(), memberID, id)
 			if err != nil {
 				exitMemberError(err)
 			}
@@ -285,7 +321,7 @@ func main() {
 			}
 			id := resolveIdentity(*idFlag)
 			memberID, roleStr := fs.Arg(0), fs.Arg(1)
-			ev, err := room.SetMemberRole(".", memberID, members.Role(roleStr), id)
+			ev, err := room.SetMemberRole(roomDir(), memberID, members.Role(roleStr), id)
 			if err != nil {
 				exitMemberError(err)
 			}
@@ -308,7 +344,7 @@ func main() {
 		}
 		msg := fs.Arg(0)
 		id := resolveIdentity(*idFlag)
-		ev, err := room.PostNote(".", msg, id)
+		ev, err := room.PostNote(roomDir(), msg, id)
 		if err != nil {
 			if errors.Is(err, members.ErrObserverForbidden) {
 				fmt.Fprintln(os.Stderr, "Error: observer role has read-only access")
@@ -342,7 +378,7 @@ func main() {
 		if *refsFlag != "" {
 			refs = strings.Split(*refsFlag, ",")
 		}
-		ev, err := room.RecordDecision(".", msg, refs, id)
+		ev, err := room.RecordDecision(roomDir(), msg, refs, id)
 		if err != nil {
 			if errors.Is(err, members.ErrObserverForbidden) {
 				fmt.Fprintln(os.Stderr, "Error: observer role has read-only access")
@@ -365,7 +401,7 @@ func main() {
 			os.Exit(int(exitcodes.ExitNoInput))
 		}
 
-		j := journal.New("journal")
+		j := journal.New(filepath.Join(roomDir(), "journal"))
 		report, err := j.Verify()
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Error verifying journal: %v\n", err)
@@ -403,7 +439,7 @@ func main() {
 			os.Exit(int(exitcodes.ExitNoInput))
 		}
 
-		j := journal.New("journal")
+		j := journal.New(filepath.Join(roomDir(), "journal"))
 		res, err := j.QueryLog(journal.LogFilter{
 			Since:  *sinceFlag,
 			Until:  *untilFlag,
@@ -436,7 +472,7 @@ func main() {
 			os.Exit(int(exitcodes.ExitOK))
 		}
 
-		j := journal.New("journal")
+		j := journal.New(filepath.Join(roomDir(), "journal"))
 		dbPath := filepath.Join(".symroom", "index.sqlite")
 		indexer := index.New(dbPath)
 
@@ -467,7 +503,7 @@ func main() {
 			}
 			filePath := fs.Arg(0)
 			id := resolveIdentity(*idFlag)
-			ev, err := artifact.Link(".", "", filePath, *titleFlag, id)
+			ev, err := artifact.Link(roomDir(), "", filePath, *titleFlag, id)
 			if err != nil {
 				if errors.Is(err, artifact.ErrOutsideRoot) {
 					fmt.Fprintln(os.Stderr, "Error: path is outside artifact root")
@@ -491,7 +527,7 @@ func main() {
 			}
 			artID := fs.Arg(0)
 			id := resolveIdentity(*idFlag)
-			ev, err := artifact.Unlink(".", artID, id)
+			ev, err := artifact.Unlink(roomDir(), artID, id)
 			if err != nil {
 				fmt.Fprintf(os.Stderr, "Error unlinking artifact: %v\n", err)
 				os.Exit(int(exitcodes.ExitGeneric))
@@ -505,7 +541,7 @@ func main() {
 			if err := fs.Parse(os.Args[3:]); err != nil {
 				os.Exit(int(exitcodes.ExitNoInput))
 			}
-			list, err := artifact.List(".", "")
+			list, err := artifact.List(roomDir(), "")
 			if err != nil {
 				fmt.Fprintf(os.Stderr, "Error listing artifacts: %v\n", err)
 				os.Exit(int(exitcodes.ExitGeneric))
@@ -550,7 +586,7 @@ func main() {
 		}()
 
 		handler := func(item *desk.EventStreamItem) error {
-			return artifact.HandleDeskEvent(".", "", item, id)
+			return artifact.HandleDeskEvent(roomDir(), "", item, id)
 		}
 
 		fmt.Printf("Watching symdesk vault %s...\n", *deskVaultFlag)
@@ -581,7 +617,7 @@ func main() {
 				os.Exit(int(exitcodes.ExitNoInput))
 			}
 			id := resolveIdentity(*idFlag)
-			ev, err := run.Request(".", *titleFlag, *planFlag, *adapterFlag, id)
+			ev, err := run.Request(roomDir(), *titleFlag, *planFlag, *adapterFlag, id)
 			if err != nil {
 				fmt.Fprintf(os.Stderr, "Error requesting run: %v\n", err)
 				os.Exit(int(exitcodes.ExitGeneric))
@@ -596,7 +632,7 @@ func main() {
 			if err := fs.Parse(os.Args[3:]); err != nil {
 				os.Exit(int(exitcodes.ExitNoInput))
 			}
-			runs, err := run.List(".", *pendingFlag)
+			runs, err := run.List(roomDir(), *pendingFlag)
 			if err != nil {
 				fmt.Fprintf(os.Stderr, "Error listing runs: %v\n", err)
 				os.Exit(int(exitcodes.ExitGeneric))
@@ -621,7 +657,7 @@ func main() {
 				fmt.Fprintln(os.Stderr, "Usage: symroom run show <run_id> [--json]")
 				os.Exit(int(exitcodes.ExitNoInput))
 			}
-			r, err := run.Get(".", fs.Arg(0))
+			r, err := run.Get(roomDir(), fs.Arg(0))
 			if err != nil {
 				if errors.Is(err, run.ErrRunNotFound) {
 					fmt.Fprintf(os.Stderr, "Error: run %s not found\n", fs.Arg(0))
@@ -659,7 +695,7 @@ func main() {
 				os.Exit(int(exitcodes.ExitNoInput))
 			}
 			id := resolveIdentity(*idFlag)
-			ev, err := run.Start(".", fs.Arg(0), id)
+			ev, err := run.Start(roomDir(), fs.Arg(0), id)
 			if err != nil {
 				if errors.Is(err, run.ErrInvalidTransition) {
 					fmt.Fprintf(os.Stderr, "Error: %v\n", err)
@@ -683,7 +719,7 @@ func main() {
 				os.Exit(int(exitcodes.ExitNoInput))
 			}
 			id := resolveIdentity(*idFlag)
-			ev, err := run.Cancel(".", fs.Arg(0), *reasonFlag, id)
+			ev, err := run.Cancel(roomDir(), fs.Arg(0), *reasonFlag, id)
 			if err != nil {
 				if errors.Is(err, run.ErrInvalidTransition) {
 					fmt.Fprintf(os.Stderr, "Error: %v\n", err)
@@ -710,7 +746,7 @@ func main() {
 			ctx, cancel := context.WithTimeout(context.Background(), *timeoutFlag)
 			defer cancel()
 
-			r, err := run.Wait(ctx, ".", runID, 500*time.Millisecond)
+			r, err := run.Wait(ctx, roomDir(), runID, 500*time.Millisecond)
 			if err != nil {
 				if errors.Is(err, run.ErrWaitTimeout) {
 					fmt.Fprintf(os.Stderr, "Error: wait timed out for run %s\n", runID)
@@ -745,7 +781,7 @@ func main() {
 				os.Exit(int(exitcodes.ExitNoInput))
 			}
 			id := resolveIdentity(*idFlag)
-			ev, err := approval.Approve(".", fs.Arg(0), *scopeFlag, *ttlFlag, id)
+			ev, err := approval.Approve(roomDir(), fs.Arg(0), *scopeFlag, *ttlFlag, id)
 			if err != nil {
 				if errors.Is(err, approval.ErrAgentApprovalForbidden) {
 					fmt.Fprintln(os.Stderr, "Error: agent identity is forbidden from approving runs")
@@ -769,7 +805,7 @@ func main() {
 				os.Exit(int(exitcodes.ExitNoInput))
 			}
 			id := resolveIdentity(*idFlag)
-			ev, err := approval.Deny(".", fs.Arg(0), *reasonFlag, id)
+			ev, err := approval.Deny(roomDir(), fs.Arg(0), *reasonFlag, id)
 			if err != nil {
 				fmt.Fprintf(os.Stderr, "Error denying run: %v\n", err)
 				os.Exit(int(exitcodes.ExitGeneric))
@@ -803,7 +839,7 @@ func main() {
 				os.Exit(int(exitcodes.ExitNoInput))
 			}
 			id := resolveIdentity(*idFlag)
-			ev, err := run.RequestCheckpoint(".", *runFlag, *qFlag, id)
+			ev, err := run.RequestCheckpoint(roomDir(), *runFlag, *qFlag, id)
 			if err != nil {
 				fmt.Fprintf(os.Stderr, "Error requesting checkpoint: %v\n", err)
 				os.Exit(int(exitcodes.ExitGeneric))
@@ -816,7 +852,7 @@ func main() {
 			ctx, cancel := context.WithTimeout(context.Background(), *timeoutFlag)
 			defer cancel()
 
-			chk, err := run.WaitCheckpoint(ctx, ".", b.CheckpointID, 500*time.Millisecond)
+			chk, err := run.WaitCheckpoint(ctx, roomDir(), b.CheckpointID, 500*time.Millisecond)
 			if err != nil {
 				if errors.Is(err, run.ErrWaitTimeout) {
 					fmt.Fprintf(os.Stderr, "Error: wait timed out for checkpoint %s\n", b.CheckpointID)
@@ -841,7 +877,7 @@ func main() {
 			}
 			chkID := fs.Arg(0)
 			id := resolveIdentity(*idFlag)
-			ev, err := run.ResolveCheckpoint(".", chkID, *answerFlag, id)
+			ev, err := run.ResolveCheckpoint(roomDir(), chkID, *answerFlag, id)
 			if err != nil {
 				if errors.Is(err, run.ErrAgentCheckpointResolveForbidden) {
 					fmt.Fprintln(os.Stderr, "Error: agent identity is forbidden from resolving checkpoints")
@@ -871,7 +907,7 @@ func main() {
 			os.Exit(int(exitcodes.ExitNoInput))
 		}
 
-		content, prof, err := brainprofile.Generate(".", *memberFlag)
+		content, prof, err := brainprofile.Generate(roomDir(), *memberFlag)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Error generating brain profile: %v\n", err)
 			os.Exit(int(exitcodes.ExitGeneric))
@@ -896,7 +932,7 @@ func main() {
 		if err := fs.Parse(os.Args[2:]); err != nil {
 			os.Exit(int(exitcodes.ExitNoInput))
 		}
-		report, err := doctor.Run(".")
+		report, err := doctor.Run(roomDir())
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Error running doctor: %v\n", err)
 			os.Exit(int(exitcodes.ExitGeneric))
@@ -922,14 +958,14 @@ func main() {
 		os.Exit(int(exitcodes.ExitOK))
 	case "mcp":
 		fs := flag.NewFlagSet("mcp", flag.ExitOnError)
-		roomDir := fs.String("room", ".", "Room directory")
+		mcpRoomDir := fs.String("room", ".", "Room directory")
 		identityName := fs.String("identity", "", "Signing identity name")
 		artifactRoot := fs.String("artifact-root", "", "Artifact root directory")
 		if err := fs.Parse(os.Args[2:]); err != nil {
 			os.Exit(int(exitcodes.ExitNoInput))
 		}
 		id := resolveIdentity(*identityName)
-		if err := mcp.NewServer(*roomDir, id, *artifactRoot).ServeStdio(context.Background()); err != nil {
+		if err := mcp.NewServer(*mcpRoomDir, id, *artifactRoot).ServeStdio(context.Background()); err != nil {
 			fmt.Fprintln(os.Stderr, err)
 			os.Exit(int(exitcodes.ExitGeneric))
 		}
