@@ -75,4 +75,13 @@ final class SymroomModelsTests: XCTestCase {
         let members = try decoder.decode([RoomMember].self, from: Data("[]".utf8))
         XCTAssertTrue(members.isEmpty)
     }
+
+    func testJournalNDJSONStrictDecodingRejectsMalformedLine() {
+        // A truncated/corrupted line must fail loudly, never vanish silently.
+        let fixture = """
+        {"v":1,"id":"ev_1","room":"test","author":"alice","seq":1,"prev":"","lamport":1,"ts":"2026-08-01T10:00:00.000Z","kind":"note.posted","body":{"message":"hello"}}
+        {"this is not json
+        """
+        XCTAssertThrowsError(try RoomCLIClient.decodeJournalLines(Data(fixture.utf8)))
+    }
 }

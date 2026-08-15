@@ -67,9 +67,18 @@ public final class RoomCLIClient: Sendable {
         if let kind { args += ["--kind", kind] }
         if let author { args += ["--author", author] }
         let data = try await run(args, in: roomDir)
+        return try Self.decodeJournalLines(data)
+    }
+
+    /// Splits NDJSON output and decodes every line strictly. A line that fails
+    /// to decode (schema drift, corrupted output) throws instead of vanishing
+    /// silently — a truncated journal must never render as a complete one.
+    static func decodeJournalLines(_ data: Data) throws -> [JournalEvent] {
+        let decoder = JSONDecoder()
+        decoder.keyDecodingStrategy = .convertFromSnakeCase
         let text = String(data: data, encoding: .utf8) ?? ""
-        return text.split(separator: "\n").compactMap { line in
-            try? decoder.decode(JournalEvent.self, from: Data(line.utf8))
+        return try text.split(separator: "\n").map { line in
+            try decoder.decode(JournalEvent.self, from: Data(line.utf8))
         }
     }
 
