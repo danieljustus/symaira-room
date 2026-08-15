@@ -1,3 +1,9 @@
 bin/
 .DS_Store
 .worktrees/
+coverage.out
+
+# Local working artifacts (audit/review/coverage reports, never versioned)
+.github/audit/
+.github/review/
+.github/coverage/
