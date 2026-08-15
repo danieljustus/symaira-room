@@ -121,9 +121,27 @@ symroom member list
 # mem_<alice-hash>         alice   owner   human
 # mem_<bob-hash>           bob     agent   agent
 
+symroom member list --json
+# [
+#   {
+#     "id": "mem_<alice-hash>",
+#     "name": "alice",
+#     "role": "owner",
+#     "kind": "human"
+#   },
+#   {
+#     "id": "mem_<bob-hash>",
+#     "name": "bob",
+#     "role": "agent",
+#     "kind": "agent"
+#   }
+# ]
+
 symroom member role --identity alice mem_<bob-hash> member
 symroom member remove --identity alice mem_<bob-hash>
 ```
+
+`member list --json` prints the members as a machine-readable JSON array (fields `id`, `name`, `role`, `kind`, sorted by ID) — the input format used by the [Swift client](#swift-client-symroomclient).
 
 | Role       | Can approve runs? | Can post notes? | Can manage members? |
 |------------|:---:|:---:|:---:|
@@ -326,6 +344,51 @@ my-project/
 | 10 | Interrupted (e.g. `run wait` / `checkpoint wait` timed out) |
 
 Scripts should check these codes rather than matching stderr text. Codes are stable for the v0.x line; see the `exitcodes` package for the canonical list.
+
+---
+
+## Swift Client (SymroomClient)
+
+A Swift package for macOS 14+ integrations lives in [`client/`](client/). It consumes the `symroom` CLI — it renders `--json` output and never reimplements room logic. The package is not published to a separate registry; reference it as a local path dependency:
+
+| Product | Purpose |
+|---|---|
+| `SymroomKit` | CLI bridge (`RoomCLIClient`) plus Codable models for members, runs, checkpoints, and journal events. |
+| `SymroomFeature` | SwiftUI views and state for the Symaira Hub (room dashboard, participants, journal, approvals). |
+
+```swift
+// swift-tools-version:6.0
+import PackageDescription
+
+let package = Package(
+    name: "MyIntegration",
+    dependencies: [
+        .package(path: "../symaira-room/client"),
+    ],
+    targets: [
+        .target(
+            name: "MyIntegration",
+            dependencies: [
+                .product(name: "SymroomKit", package: "SymroomClient"),
+            ]
+        ),
+    ]
+)
+```
+
+Minimal usage — read the member list as JSON:
+
+```swift
+import SymroomKit
+
+let client = RoomCLIClient()
+let members = try await client.listMembers(in: "/path/to/room")
+for member in members {
+    print("\(member.name): \(member.role)")
+}
+```
+
+`RoomCLIClient` locates the `symroom` binary on `PATH` (or Homebrew paths) and runs it with `SYMROOM_ROOM_DIR`; see [`client/`](client/) for the full API (journal, runs, checkpoints).
 
 ---
 
