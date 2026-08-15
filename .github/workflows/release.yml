@@ -41,7 +41,14 @@ jobs:
           cosign-release: 'v2.6.4'
       - name: Install syft
         run: |
-          curl -sSfL https://raw.githubusercontent.com/anchore/syft/main/install.sh | sh -s -- -b "$RUNNER_TEMP/bin"
+          # Pin syft to a released version with an inline sha256 instead of
+          # piping the unpinned install.sh from 'main'.
+          SYFT_ARCHIVE="syft_1.51.0_linux_amd64.tar.gz"
+          SYFT_SHA256="2a2e837a2c8d59ec9af5472ee22d3b04ee463c4e44476ecf993fd1e5ab6ebc7f"
+          mkdir -p "$RUNNER_TEMP/bin"
+          curl -sSfL -o "$RUNNER_TEMP/$SYFT_ARCHIVE" "https://github.com/anchore/syft/releases/download/v1.51.0/$SYFT_ARCHIVE"
+          echo "$SYFT_SHA256  $RUNNER_TEMP/$SYFT_ARCHIVE" | sha256sum -c -
+          tar -xzf "$RUNNER_TEMP/$SYFT_ARCHIVE" -C "$RUNNER_TEMP/bin"
           echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
       - name: Dry-run build (all targets, no secrets)
         if: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run == true }}
