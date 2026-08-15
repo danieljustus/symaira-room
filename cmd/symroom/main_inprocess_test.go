@@ -174,11 +174,15 @@ func TestMainDispatchCoversSubcommands(t *testing.T) {
 		t.Errorf("member list --json: got %d members, want 2 (%q)", len(members), membersJSON)
 	}
 	assertRun(roomDir, 0, []string{"Updated role for"}, "member", "role", "--identity", "alice", bobID, "member")
+	assertRun(roomDir, 0, []string{"# To install run:"}, "brain-profile", "--member", bobID)
 	assertRun(base, 0, []string{"Created identity eve"}, "identity", "create", "eve")
 	assertRun(roomDir, 4, []string{"only room owners"},
 		"member", "add", "--identity", "eve", "--pubkey", hex.EncodeToString(eve.PublicKey), "--name", "eve")
 	assertRun(roomDir, 2, []string{"invalid member role"},
 		"member", "add", "--identity", "alice", "--pubkey", hex.EncodeToString(eve.PublicKey), "--name", "eve", "--role", "admin")
+	assertRun(roomDir, 2, []string{"invalid member kind"},
+		"member", "add", "--identity", "alice", "--pubkey", hex.EncodeToString(eve.PublicKey), "--name", "eve", "--kind", "cyborg")
+	assertRun(roomDir, 5, []string{"member not found"}, "member", "remove", "--identity", "alice", "member_ghost")
 	assertRun(roomDir, 0, []string{"Member removed"}, "member", "remove", "--identity", "alice", bobID)
 
 	// ---- note / decide / log / verify / index --------------------------------
@@ -192,6 +196,7 @@ func TestMainDispatchCoversSubcommands(t *testing.T) {
 	assertRun(roomDir, 0, []string{"hello world", "note.posted"}, "log")
 	assertRun(roomDir, 0, []string{`"kind":"note.posted"`}, "log", "--json", "--limit", "10")
 	assertRun(roomDir, 0, []string{"PASSED"}, "verify")
+	assertRun(roomDir, 0, []string{`"valid": true`}, "verify", "--json")
 	assertRun(roomDir, 0, []string{"Rebuilt derived index"}, "index", "rebuild")
 
 	// ---- artifact ------------------------------------------------------------
@@ -215,6 +220,11 @@ func TestMainDispatchCoversSubcommands(t *testing.T) {
 	assertRun(roomDir, 0, []string{"ev_"}, "run", "approve", "--identity", "alice", "--scope", "local", "--ttl", "1h", runID)
 	assertRun(roomDir, 0, []string{"approved"}, "run", "wait", "--timeout", "5s", runID)
 
+	// run start requires the approved state; a second start is an invalid
+	// transition (exit 2).
+	assertRun(roomDir, 0, []string{"ev_"}, "run", "start", "--identity", "alice", runID)
+	assertRun(roomDir, 2, []string{"invalid run state transition"}, "run", "start", "--identity", "alice", runID)
+
 	// ---- checkpoint ----------------------------------------------------------
 	assertRun(roomDir, 10, []string{"wait timed out for checkpoint"},
 		"checkpoint", "request", "--identity", "alice", "--run", runID, "--question", "Continue?", "--timeout", "300ms")
@@ -224,6 +234,11 @@ func TestMainDispatchCoversSubcommands(t *testing.T) {
 	assertRun(roomDir, 2, []string{"--identity is required"}, "mcp")
 	assertRun(roomDir, 2, []string{"Usage: symroom brain-profile"}, "brain-profile")
 	assertRun(roomDir, 0, []string{"Usage: symroom watch"}, "watch")
+
+	// doctor reports failed checks (no default identity configured) with the
+	// stable generic exit code 1, in both human and JSON surfaces.
+	assertRun(roomDir, 1, []string{"no default identity is configured"}, "doctor")
+	assertRun(roomDir, 1, []string{`"failed": true`}, "doctor", "--json")
 }
 
 // TestResolveIdentityInProcess covers the happy path of resolveIdentity
