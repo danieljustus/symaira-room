@@ -19,26 +19,26 @@ func runBrainProfile(args []string, stdout, stderr io.Writer) int {
 	}
 
 	if *memberFlag == "" {
-		fmt.Fprintln(stderr, "Usage: symroom brain-profile --member <id> [--install]")
+		_, _ = fmt.Fprintln(stderr, "Usage: symroom brain-profile --member <id> [--install]")
 		return int(exitcodes.ExitNoInput)
 	}
 
 	content, prof, err := brainprofile.Generate(roomDir(), *memberFlag)
 	if err != nil {
-		fmt.Fprintf(stderr, "Error generating brain profile: %v\n", err)
+		_, _ = fmt.Fprintf(stderr, "Error generating brain profile: %v\n", err)
 		return int(exitcodes.ExitGeneric)
 	}
 
 	if *installFlag {
 		msg, err := brainprofile.Install(prof.Name, content)
 		if err != nil {
-			fmt.Fprintf(stderr, "Error installing profile: %v\n", err)
+			_, _ = fmt.Fprintf(stderr, "Error installing profile: %v\n", err)
 			return int(exitcodes.ExitGeneric)
 		}
-		fmt.Fprintln(stdout, msg)
+		_, _ = fmt.Fprintln(stdout, msg)
 	} else {
-		fmt.Fprintln(stdout, content)
-		fmt.Fprintf(stdout, "# To install run:\n# symbrain install --harness <harness> --profile %s\n", prof.Name)
+		_, _ = fmt.Fprintln(stdout, content)
+		_, _ = fmt.Fprintf(stdout, "# To install run:\n# symbrain install --harness <harness> --profile %s\n", prof.Name)
 	}
 	return int(exitcodes.ExitOK)
 }

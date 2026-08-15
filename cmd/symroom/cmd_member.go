@@ -52,11 +52,11 @@ func runMember(args []string, stdout, stderr io.Writer) int {
 		}
 		pubBytes, err := hex.DecodeString(pubKeyHex)
 		if err != nil {
-			fmt.Fprintf(stderr, "Invalid public key hex: %v\n", err)
+			_, _ = fmt.Fprintf(stderr, "Invalid public key hex: %v\n", err)
 			return int(exitcodes.ExitNoInput)
 		}
 		memID := identity.ComputeMemberID(pubBytes)
-		fmt.Fprintf(stdout, "Member added: %s (%s, role: %s, kind: %s, event: %s)\n", memberName, memID, *roleFlag, *kindFlag, ev.ID)
+		_, _ = fmt.Fprintf(stdout, "Member added: %s (%s, role: %s, kind: %s, event: %s)\n", memberName, memID, *roleFlag, *kindFlag, ev.ID)
 		return int(exitcodes.ExitOK)
 	case "list":
 		fs := flag.NewFlagSet("member list", flag.ExitOnError)
@@ -66,14 +66,14 @@ func runMember(args []string, stdout, stderr io.Writer) int {
 		}
 		state, err := room.ListMembers(roomDir())
 		if err != nil {
-			fmt.Fprintf(stderr, "Error listing members: %v\n", err)
+			_, _ = fmt.Fprintf(stderr, "Error listing members: %v\n", err)
 			return int(exitcodes.ExitGeneric)
 		}
 		if len(state.Members) == 0 {
 			if *jsonFlag {
-				fmt.Fprintln(stdout, "[]")
+				_, _ = fmt.Fprintln(stdout, "[]")
 			} else {
-				fmt.Fprintln(stdout, "No members")
+				_, _ = fmt.Fprintln(stdout, "No members")
 			}
 			return int(exitcodes.ExitOK)
 		}
@@ -95,7 +95,7 @@ func runMember(args []string, stdout, stderr io.Writer) int {
 				out = append(out, memberJSON{ID: m.ID, Name: m.Name, Role: string(m.Role), Kind: string(m.Kind)})
 			}
 			data, _ := json.MarshalIndent(out, "", "  ")
-			fmt.Fprintln(stdout, string(data))
+			_, _ = fmt.Fprintln(stdout, string(data))
 			return int(exitcodes.ExitOK)
 		}
 		w := tabwriter.NewWriter(stdout, 0, 0, 2, ' ', 0)
@@ -122,7 +122,7 @@ func runMember(args []string, stdout, stderr io.Writer) int {
 		if err != nil {
 			exitMemberError(err)
 		}
-		fmt.Fprintf(stdout, "Member removed: %s (event: %s)\n", memberID, ev.ID)
+		_, _ = fmt.Fprintf(stdout, "Member removed: %s (event: %s)\n", memberID, ev.ID)
 		return int(exitcodes.ExitOK)
 	case "role":
 		fs := flag.NewFlagSet("member role", flag.ExitOnError)
@@ -140,10 +140,10 @@ func runMember(args []string, stdout, stderr io.Writer) int {
 		if err != nil {
 			exitMemberError(err)
 		}
-		fmt.Fprintf(stdout, "Updated role for %s to %s (event: %s)\n", memberID, roleStr, ev.ID)
+		_, _ = fmt.Fprintf(stdout, "Updated role for %s to %s (event: %s)\n", memberID, roleStr, ev.ID)
 		return int(exitcodes.ExitOK)
 	default:
-		fmt.Fprintf(stderr, "Unknown member action: %s\n", sub)
+		_, _ = fmt.Fprintf(stderr, "Unknown member action: %s\n", sub)
 		return int(exitcodes.ExitNoInput)
 	}
 }

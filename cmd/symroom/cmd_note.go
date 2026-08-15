@@ -20,7 +20,7 @@ func runNote(args []string, stdout, stderr io.Writer) int {
 		return int(exitcodes.ExitNoInput)
 	}
 	if fs.NArg() < 1 {
-		fmt.Fprintln(stdout, "Usage: symroom note <message> [--identity <name>] [--json]")
+		_, _ = fmt.Fprintln(stdout, "Usage: symroom note <message> [--identity <name>] [--json]")
 		return int(exitcodes.ExitOK)
 	}
 	msg := fs.Arg(0)
@@ -28,17 +28,17 @@ func runNote(args []string, stdout, stderr io.Writer) int {
 	ev, err := room.PostNote(roomDir(), msg, id)
 	if err != nil {
 		if errors.Is(err, members.ErrObserverForbidden) {
-			fmt.Fprintln(stderr, "Error: observer role has read-only access")
+			_, _ = fmt.Fprintln(stderr, "Error: observer role has read-only access")
 			return int(exitcodes.ExitGeneric)
 		}
-		fmt.Fprintf(stderr, "Error posting note: %v\n", err)
+		_, _ = fmt.Fprintf(stderr, "Error posting note: %v\n", err)
 		return int(exitcodes.ExitGeneric)
 	}
 	if *jsonFlag {
 		data, _ := ev.MarshalJSONLine()
-		fmt.Fprint(stdout, string(data))
+		_, _ = fmt.Fprint(stdout, string(data))
 	} else {
-		fmt.Fprintln(stdout, ev.ID)
+		_, _ = fmt.Fprintln(stdout, ev.ID)
 	}
 	return int(exitcodes.ExitOK)
 }

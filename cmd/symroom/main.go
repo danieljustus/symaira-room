@@ -54,7 +54,7 @@ func roomDir() string {
 // the process exit code. main() only maps the result to os.Exit.
 func main() {
 	if len(os.Args) < 2 {
-		fmt.Fprint(os.Stderr, usageText)
+		_, _ = fmt.Fprint(os.Stderr, usageText)
 		os.Exit(int(exitcodes.ExitNoInput))
 	}
 	os.Exit(dispatch(context.Background(), os.Args))
@@ -100,7 +100,7 @@ func dispatch(ctx context.Context, args []string) int {
 		_, _ = fmt.Fprint(os.Stdout, usageText)
 		return int(exitcodes.ExitOK)
 	default:
-		fmt.Fprintf(os.Stderr, "Unknown subcommand: %s\n\n%s", args[1], usageText)
+		_, _ = fmt.Fprintf(os.Stderr, "Unknown subcommand: %s\n\n%s", args[1], usageText)
 		return int(exitcodes.ExitNoInput)
 	}
 }
@@ -118,7 +118,7 @@ func resolveIdentity(idName string) *identity.Identity {
 	}
 	id, err := identity.Load(idName)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error loading identity %s: %v\n", idName, err)
+		_, _ = fmt.Fprintf(os.Stderr, "Error loading identity %s: %v\n", idName, err)
 		os.Exit(int(exitcodes.ExitNotFound))
 	}
 	return id
@@ -141,7 +141,7 @@ func exitMemberError(err error) {
 		_, _ = fmt.Fprintln(os.Stderr, "Error: invalid member kind (valid: human|agent)")
 		os.Exit(int(exitcodes.ExitNoInput))
 	default:
-		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		_, _ = fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 		os.Exit(int(exitcodes.ExitGeneric))
 	}
 }

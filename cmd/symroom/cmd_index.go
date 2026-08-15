@@ -13,7 +13,7 @@ import (
 // runIndex implements the "index" subcommand.
 func runIndex(args []string, stdout, stderr io.Writer) int {
 	if len(args) < 3 || args[2] != "rebuild" {
-		fmt.Fprintln(stdout, "Usage: symroom index rebuild")
+		_, _ = fmt.Fprintln(stdout, "Usage: symroom index rebuild")
 		return int(exitcodes.ExitOK)
 	}
 
@@ -22,10 +22,10 @@ func runIndex(args []string, stdout, stderr io.Writer) int {
 	indexer := index.New(dbPath)
 
 	if err := indexer.Rebuild(j); err != nil {
-		fmt.Fprintf(stderr, "Error rebuilding index: %v\n", err)
+		_, _ = fmt.Fprintf(stderr, "Error rebuilding index: %v\n", err)
 		return int(exitcodes.ExitGeneric)
 	}
 
-	fmt.Fprintf(stdout, "Rebuilt derived index at %s\n", dbPath)
+	_, _ = fmt.Fprintf(stdout, "Rebuilt derived index at %s\n", dbPath)
 	return int(exitcodes.ExitOK)
 }

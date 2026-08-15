@@ -25,7 +25,7 @@ func runWatch(ctx context.Context, args []string, stdout, stderr io.Writer) int 
 	}
 
 	if *deskVaultFlag == "" {
-		fmt.Fprintln(stdout, "Usage: symroom watch --desk <vault> [--identity <name>]")
+		_, _ = fmt.Fprintln(stdout, "Usage: symroom watch --desk <vault> [--identity <name>]")
 		return int(exitcodes.ExitOK)
 	}
 
@@ -45,9 +45,9 @@ func runWatch(ctx context.Context, args []string, stdout, stderr io.Writer) int 
 		return artifact.HandleDeskEvent(roomDir(), "", item, id)
 	}
 
-	fmt.Fprintf(stdout, "Watching symdesk vault %s...\n", *deskVaultFlag)
+	_, _ = fmt.Fprintf(stdout, "Watching symdesk vault %s...\n", *deskVaultFlag)
 	if err := desk.WatchDesk(ctx, *deskVaultFlag, handler); err != nil && !errors.Is(err, context.Canceled) {
-		fmt.Fprintf(stderr, "Watch error: %v\n", err)
+		_, _ = fmt.Fprintf(stderr, "Watch error: %v\n", err)
 		return int(exitcodes.ExitGeneric)
 	}
 	return int(exitcodes.ExitOK)

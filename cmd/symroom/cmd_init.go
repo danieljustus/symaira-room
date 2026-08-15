@@ -30,7 +30,7 @@ func runInit(args []string, stdout, stderr io.Writer) int {
 		idName = cfg.DefaultIdentity
 	}
 	if idName == "" && fs.NArg() == 0 {
-		fmt.Fprintln(stdout, "Usage: symroom init <dir> --identity <name> [--name <display_name>]")
+		_, _ = fmt.Fprintln(stdout, "Usage: symroom init <dir> --identity <name> [--name <display_name>]")
 		return int(exitcodes.ExitOK)
 	}
 
@@ -38,10 +38,10 @@ func runInit(args []string, stdout, stderr io.Writer) int {
 
 	roomCfg, err := room.Init(targetDir, *nameFlag, id)
 	if err != nil {
-		fmt.Fprintf(stderr, "Error initializing room: %v\n", err)
+		_, _ = fmt.Fprintf(stderr, "Error initializing room: %v\n", err)
 		return int(exitcodes.ExitGeneric)
 	}
 
-	fmt.Fprintf(stdout, "Initialized room %s in %s (owner: %s)\n", roomCfg.ID, targetDir, id.Name)
+	_, _ = fmt.Fprintf(stdout, "Initialized room %s in %s (owner: %s)\n", roomCfg.ID, targetDir, id.Name)
 	return int(exitcodes.ExitOK)
 }

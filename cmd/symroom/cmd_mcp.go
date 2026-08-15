@@ -21,7 +21,7 @@ func runMcp(args []string, stdout, stderr io.Writer) int {
 	}
 	id := resolveIdentity(*identityName)
 	if err := mcp.NewServer(*mcpRoomDir, id, *artifactRoot).ServeStdio(context.Background()); err != nil {
-		fmt.Fprintln(stderr, err)
+		_, _ = fmt.Fprintln(stderr, err)
 		return int(exitcodes.ExitGeneric)
 	}
 	return int(exitcodes.ExitOK)

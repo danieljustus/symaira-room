@@ -22,7 +22,7 @@ func runVersion(args []string, stdout, stderr io.Writer) int {
 			return int(exitcodes.ExitGeneric)
 		}
 	} else {
-		fmt.Fprintln(stdout, info.String())
+		_, _ = fmt.Fprintln(stdout, info.String())
 	}
 	return int(exitcodes.ExitOK)
 }

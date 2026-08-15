@@ -34,7 +34,7 @@ func runLog(args []string, stdout, stderr io.Writer) int {
 		Limit:  *limitFlag,
 	})
 	if err != nil {
-		fmt.Fprintf(stderr, "Error querying log: %v\n", err)
+		_, _ = fmt.Fprintf(stderr, "Error querying log: %v\n", err)
 		return int(exitcodes.ExitGeneric)
 	}
 
@@ -43,11 +43,11 @@ func runLog(args []string, stdout, stderr io.Writer) int {
 	if *jsonFlag {
 		for _, ev := range res.Events {
 			line, _ := ev.MarshalJSONLine()
-			fmt.Fprint(stdout, string(line))
+			_, _ = fmt.Fprint(stdout, string(line))
 		}
 	} else {
 		for _, ev := range res.Events {
-			fmt.Fprintln(stdout, journal.FormatEventHuman(ev))
+			_, _ = fmt.Fprintln(stdout, journal.FormatEventHuman(ev))
 		}
 	}
 	return int(exitcodes.ExitOK)

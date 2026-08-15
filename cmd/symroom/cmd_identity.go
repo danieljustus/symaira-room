@@ -20,43 +20,43 @@ func runIdentity(args []string, stdout, stderr io.Writer) int {
 	switch action {
 	case "create":
 		if len(args) < 4 {
-			fmt.Fprintln(stderr, "Usage: symroom identity create <name>")
+			_, _ = fmt.Fprintln(stderr, "Usage: symroom identity create <name>")
 			return int(exitcodes.ExitNoInput)
 		}
 		name := args[3]
 		id, err := identity.Generate(name)
 		if err != nil {
-			fmt.Fprintf(stderr, "Error generating identity: %v\n", err)
+			_, _ = fmt.Fprintf(stderr, "Error generating identity: %v\n", err)
 			return int(exitcodes.ExitGeneric)
 		}
 		if err := identity.Save(id); err != nil {
-			fmt.Fprintf(stderr, "Error saving identity: %v\n", err)
+			_, _ = fmt.Fprintf(stderr, "Error saving identity: %v\n", err)
 			return int(exitcodes.ExitGeneric)
 		}
-		fmt.Fprintf(stdout, "Created identity %s (%s)\n", id.Name, id.MemberID)
+		_, _ = fmt.Fprintf(stdout, "Created identity %s (%s)\n", id.Name, id.MemberID)
 		return int(exitcodes.ExitOK)
 	case "list":
 		names, err := identity.List()
 		if err != nil {
-			fmt.Fprintf(stderr, "Error listing identities: %v\n", err)
+			_, _ = fmt.Fprintf(stderr, "Error listing identities: %v\n", err)
 			return int(exitcodes.ExitGeneric)
 		}
 		for _, n := range names {
-			fmt.Fprintln(stdout, n)
+			_, _ = fmt.Fprintln(stdout, n)
 		}
 		return int(exitcodes.ExitOK)
 	case "show":
 		if len(args) < 4 {
-			fmt.Fprintln(stderr, "Usage: symroom identity show <name>")
+			_, _ = fmt.Fprintln(stderr, "Usage: symroom identity show <name>")
 			return int(exitcodes.ExitNoInput)
 		}
 		name := args[3]
 		id, err := identity.Load(name)
 		if err != nil {
-			fmt.Fprintf(stderr, "Error loading identity: %v\n", err)
+			_, _ = fmt.Fprintf(stderr, "Error loading identity: %v\n", err)
 			return int(exitcodes.ExitNotFound)
 		}
-		fmt.Fprintf(stdout, "Name: %s\nMember ID: %s\nPublic Key: %x\n", id.Name, id.MemberID, id.PublicKey)
+		_, _ = fmt.Fprintf(stdout, "Name: %s\nMember ID: %s\nPublic Key: %x\n", id.Name, id.MemberID, id.PublicKey)
 		return int(exitcodes.ExitOK)
 	case "export":
 		fs := flag.NewFlagSet("identity export", flag.ExitOnError)
@@ -65,24 +65,24 @@ func runIdentity(args []string, stdout, stderr io.Writer) int {
 			return int(exitcodes.ExitNoInput)
 		}
 		if fs.NArg() < 1 {
-			fmt.Fprintln(stderr, "Usage: symroom identity export <name> --public")
+			_, _ = fmt.Fprintln(stderr, "Usage: symroom identity export <name> --public")
 			return int(exitcodes.ExitNoInput)
 		}
 		name := fs.Arg(0)
 		id, err := identity.Load(name)
 		if err != nil {
-			fmt.Fprintf(stderr, "Error loading identity: %v\n", err)
+			_, _ = fmt.Fprintf(stderr, "Error loading identity: %v\n", err)
 			return int(exitcodes.ExitNotFound)
 		}
 		if *pubFlag {
-			fmt.Fprintln(stdout, hex.EncodeToString(id.PublicKey))
+			_, _ = fmt.Fprintln(stdout, hex.EncodeToString(id.PublicKey))
 		} else {
-			fmt.Fprintf(stderr, "Exporting private key is forbidden for security\n")
+			_, _ = fmt.Fprintf(stderr, "Exporting private key is forbidden for security\n")
 			return int(exitcodes.ExitForbidden)
 		}
 		return int(exitcodes.ExitOK)
 	default:
-		fmt.Fprintf(stderr, "Unknown identity action: %s\n", action)
+		_, _ = fmt.Fprintf(stderr, "Unknown identity action: %s\n", action)
 		return int(exitcodes.ExitNoInput)
 	}
 }

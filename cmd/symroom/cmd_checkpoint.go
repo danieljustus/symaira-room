@@ -31,13 +31,13 @@ func runCheckpoint(ctx context.Context, args []string, stdout, stderr io.Writer)
 			return int(exitcodes.ExitNoInput)
 		}
 		if *runFlag == "" || *qFlag == "" {
-			fmt.Fprintln(stderr, "Usage: symroom checkpoint request --run <id> --question \"...\" [--identity <name>]")
+			_, _ = fmt.Fprintln(stderr, "Usage: symroom checkpoint request --run <id> --question \"...\" [--identity <name>]")
 			return int(exitcodes.ExitNoInput)
 		}
 		id := resolveIdentity(*idFlag)
 		ev, err := run.RequestCheckpoint(roomDir(), *runFlag, *qFlag, id)
 		if err != nil {
-			fmt.Fprintf(stderr, "Error requesting checkpoint: %v\n", err)
+			_, _ = fmt.Fprintf(stderr, "Error requesting checkpoint: %v\n", err)
 			return int(exitcodes.ExitGeneric)
 		}
 		var b struct {
@@ -51,13 +51,13 @@ func runCheckpoint(ctx context.Context, args []string, stdout, stderr io.Writer)
 		chk, err := run.WaitCheckpoint(ctx, roomDir(), b.CheckpointID, 500*time.Millisecond)
 		if err != nil {
 			if errors.Is(err, run.ErrWaitTimeout) {
-				fmt.Fprintf(stderr, "Error: wait timed out for checkpoint %s\n", b.CheckpointID)
+				_, _ = fmt.Fprintf(stderr, "Error: wait timed out for checkpoint %s\n", b.CheckpointID)
 				return int(exitcodes.ExitInterrupted)
 			}
-			fmt.Fprintf(stderr, "Error waiting for checkpoint: %v\n", err)
+			_, _ = fmt.Fprintf(stderr, "Error waiting for checkpoint: %v\n", err)
 			return int(exitcodes.ExitGeneric)
 		}
-		fmt.Fprintln(stdout, chk.Answer)
+		_, _ = fmt.Fprintln(stdout, chk.Answer)
 		return int(exitcodes.ExitOK)
 
 	case "resolve":
@@ -68,7 +68,7 @@ func runCheckpoint(ctx context.Context, args []string, stdout, stderr io.Writer)
 			return int(exitcodes.ExitNoInput)
 		}
 		if fs.NArg() < 1 || *answerFlag == "" {
-			fmt.Fprintln(stderr, "Usage: symroom checkpoint resolve <checkpoint_id> --answer \"...\" [--identity <name>]")
+			_, _ = fmt.Fprintln(stderr, "Usage: symroom checkpoint resolve <checkpoint_id> --answer \"...\" [--identity <name>]")
 			return int(exitcodes.ExitNoInput)
 		}
 		chkID := fs.Arg(0)
@@ -76,17 +76,17 @@ func runCheckpoint(ctx context.Context, args []string, stdout, stderr io.Writer)
 		ev, err := run.ResolveCheckpoint(roomDir(), chkID, *answerFlag, id)
 		if err != nil {
 			if errors.Is(err, run.ErrAgentCheckpointResolveForbidden) {
-				fmt.Fprintln(stderr, "Error: agent identity is forbidden from resolving checkpoints")
+				_, _ = fmt.Fprintln(stderr, "Error: agent identity is forbidden from resolving checkpoints")
 				return int(exitcodes.ExitNoInput)
 			}
-			fmt.Fprintf(stderr, "Error resolving checkpoint: %v\n", err)
+			_, _ = fmt.Fprintf(stderr, "Error resolving checkpoint: %v\n", err)
 			return int(exitcodes.ExitGeneric)
 		}
-		fmt.Fprintln(stdout, ev.ID)
+		_, _ = fmt.Fprintln(stdout, ev.ID)
 		return int(exitcodes.ExitOK)
 
 	default:
-		fmt.Fprintf(stderr, "Unknown checkpoint action: %s\n", sub)
+		_, _ = fmt.Fprintf(stderr, "Unknown checkpoint action: %s\n", sub)
 		return int(exitcodes.ExitNoInput)
 	}
 }
